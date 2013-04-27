@@ -116,6 +116,20 @@ var dungeon = function () { // start of the dungeon namespace
 
 
   //
+  // Functions
+  //
+
+  function willHitWall(object3D, objectSpaceDelta)
+  {
+    var worldSpaceDelta = new THREE.Vector3().copy(objectSpaceDelta);
+    object3D.localToWorld(worldSpaceDelta);
+
+    var endPos = new THREE.Vector3().addVectors(object3D.position, worldSpaceDelta);
+    return (Math.abs(endPos.x) > 100.0 || Math.abs(endPos.y) > 100.0 || Math.abs(endPos.z) > 100.0);
+  }
+
+
+  //
   // Functions for the 'playing' state.
   //
 
@@ -147,7 +161,9 @@ var dungeon = function () { // start of the dungeon namespace
 
     if (turn.y != 0.0)
       game.player.rotateOnAxis(turn, turnAmount);
-    game.player.translateOnAxis(move, moveAmount);
+    
+    if (!willHitWall(game.player, move))
+      game.player.translateOnAxis(move, moveAmount);
 
     if (game.controls) {
       game.controls.update();
