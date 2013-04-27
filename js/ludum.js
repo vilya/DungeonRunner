@@ -55,6 +55,7 @@ var ludum = function () {  // start of the ludum namespace
   // Holds game configuration data - stuff that shouldn't change once set up.
   var config = {
     'states': {},
+    'externalUpdate': false,  // If false, ludum.js calls _update() during the render loop. If true, it doesn't and you're expected to call ludum.update() from your own code.
   };
 
   // Holds the current state of the game while running.
@@ -114,14 +115,14 @@ var ludum = function () {  // start of the ludum namespace
   function addEvent(stateName, trigger, expire, eventMethods)
   {
     var newEvent = _makeEvent(trigger, expire, eventMethods);
-    config.states[stateName] = newEvent;
+    _addEvent(stateName, newEvent);
   }
 
 
   function addAlwaysOnEvent(stateName, eventMethods)
   {
     var newEvent = _makeEvent(alwaysTrigger, null, eventMethods);
-    config.states[stateName] = newEvent;
+    _addEvent(stateName, newEvent);
   }
 
 
@@ -138,7 +139,7 @@ var ludum = function () {  // start of the ludum namespace
     if (duration > 0.0)
       newEvent.duration = duration;
 
-    config.states[stateName].push(newEvent);
+    _addEvent(stateName, newEvent);
   }
 
 
@@ -313,6 +314,25 @@ var ludum = function () {  // start of the ludum namespace
     changeState(initialStateName);
 
     _mainLoop();
+  }
+
+
+  // Call this to tell ludum.js that you'll be driving the game updates by
+  // some other process, so that it knows not to call _update during the render
+  // loop.
+  function useExternalUpdates()
+  {
+    config.externalUpdate = true;
+  }
+
+
+  // This version of the update function can be called by users of ludum.js as
+  // an alternative to the built-in updating. This is to allow the updates to
+  // be driven by something other than the render loop, e.g. the physics
+  // engine.
+  function update()
+  {
+    _update();
   }
 
 
@@ -652,6 +672,8 @@ var ludum = function () {  // start of the ludum namespace
     'timeExpire': timeExpire,
     // Main game loop
     'start': start,
+    'useExternalUpdates': useExternalUpdates,
+    'update': update,
     'changeState': changeState,
     'changeToPrevState': changeToPrevState,
     // Input handling
