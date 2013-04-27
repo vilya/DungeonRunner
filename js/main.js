@@ -23,6 +23,7 @@ var dungeon = function () { // start of the dungeon namespace
       // Configuration - this generally won't change during the game.
       'shape': null,          // The 3D shape for the player.
       'moveSpeed': 20.0,      // The movement speed of the player, in metres/second.
+      'turnSpeed': 5.0,      // How quickly the player turns, in radians/second(?).
       'jumpSpeed': 1000.0,    // The starting speed for a jump, in metres/second.
       'jumpDuration': 0.8,    // How long before the player can jump again, in seconds.
 
@@ -52,11 +53,18 @@ var dungeon = function () { // start of the dungeon namespace
   {
     var geo = new THREE.CubeGeometry(100, 1, 100);
     var material = Physijs.createMaterial(
-      new THREE.MeshLambertMaterial({ color: 0xAAAAAA }),
+      new THREE.MeshLambertMaterial({
+        color: 0xAAAAAA,
+        map: THREE.ImageUtils.loadTexture('img/rock.png')
+      }),
       0.8,  // high friction
       0.4   // low restitution
     );
     var mass = 0.0;
+
+    material.map.wrapS = THREE.RepeatWrapping;
+    material.map.wrapT = THREE.RepeatWrapping;
+    material.map.repeat.set(20, 20);
 
     game.dungeon.shape = new Physijs.BoxMesh(geo, material, mass);
     game.dungeon.shape.castShadow = true;
@@ -102,6 +110,7 @@ var dungeon = function () { // start of the dungeon namespace
       }
     );
     game.player.shape.translateOnAxis(new THREE.Vector3(0, 1, 0), 1.0 + 10.0);
+    //game.player.shape.setAngularFactor(new THREE.Vector3(0, 1, 0));
     game.world.add(game.player.shape);
   }
 
@@ -116,7 +125,7 @@ var dungeon = function () { // start of the dungeon namespace
     var farClip = 1000.0;
 
     game.camera = new THREE.PerspectiveCamera(fieldOfView, aspectRatio, nearClip, farClip);
-    game.camera.position.set(60, 60, 60);
+    game.camera.position.set(0, 10, 20);
     game.camera.lookAt(game.dungeon.shape.position);
     game.world.add(game.camera);
 
@@ -139,28 +148,32 @@ var dungeon = function () { // start of the dungeon namespace
 
   function playingUpdate()
   {
-    var dir = new THREE.Vector3(0.0, 0.0, 0.0);
+    var turn = new THREE.Vector3(0.0, 0.0, 0.0);
+    var move = new THREE.Vector3(0.0, 0.0, 0.0);
+    var jump = new THREE.Vector3(0.0, game.player.jumpSpeed, 0.0);
 
     if (ludum.isKeyPressed(ludum.keycodes.LEFT))
-      dir.x -= 1.0;
+      turn.y += game.player.turnSpeed;
     if (ludum.isKeyPressed(ludum.keycodes.RIGHT))
-      dir.x += 1.0;
-    if (ludum.isKeyPressed(ludum.keycodes.UP))
-      dir.z -= 1.0;
-    if (ludum.isKeyPressed(ludum.keycodes.DOWN))
-      dir.z += 1.0;
+      turn.y -= game.player.turnSpeed;
 
-    if (dir.length() > 0.0)
-      dir = dir.normalize().multiplyScalar(game.player.moveSpeed);
+    if (ludum.isKeyPressed(ludum.keycodes.UP))
+      move.z -= game.player.moveSpeed;
+    if (ludum.isKeyPressed(ludum.keycodes.DOWN))
+      move.z += game.player.moveSpeed;
 
     var timeSinceLastJump = ludum.globals.stateT - game.player.jumpT;
     var canJump = timeSinceLastJump > game.player.jumpDuration;
-    if (ludum.isKeyPressed(' ') && canJump) {
-      dir.setY(game.player.jumpSpeed);
+    var jumping = canJump && ludum.isKeyPressed(' ');
+    if (jumping) {
+      move.y = game.player.jumpSpeed;
       game.player.jumpT = ludum.globals.stateT;
     }
 
-    game.player.shape.applyCentralImpulse(dir);
+    move.applyMatrix4(new THREE.Matrix4().extractRotation(game.player.shape.matrix));
+
+    game.player.shape.setAngularVelocity(turn);
+    game.player.shape.applyCentralImpulse(move);
   }
 
 
