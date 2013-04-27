@@ -29,6 +29,8 @@ var dungeon = function () { // start of the dungeon namespace
     'camera': null,   // The 3D object for the camera.
     'controls': null, // The current camera controls, if any.
 
+    'debug': false,
+
     // Information about the dungeon.
     'dungeonCfg': {
       'tiles': [
@@ -58,9 +60,9 @@ var dungeon = function () { // start of the dungeon namespace
     // Information about the player.
     'playerCfg': {
       'autorun':  false,  // Whether the player automatically runs.
-      'runSpeed': 15.0,   // The movement speed of the player, in metres/second.
-      'jogSpeed': 7.5,    // The movement speed of the player, in metres/second.
-      'walkSpeed': 3.0,   // The movement speed of the player, in metres/second.
+      'runSpeed': 20.0,   // The movement speed of the player, in metres/second.
+      'jogSpeed': 10.0,    // The movement speed of the player, in metres/second.
+      'walkSpeed': 5.0,   // The movement speed of the player, in metres/second.
       'turnSpeed': 5.0,   // How quickly the player turns, in radians/second(?).
     },
 
@@ -129,7 +131,7 @@ var dungeon = function () { // start of the dungeon namespace
         _makeXWall(MAP_ROWS, c);
     }
 
-    var light = _makeDirectionalLight(new THREE.Vector3(60, 60, 0), game.dungeon.position);
+    var light = new THREE.AmbientLight(0x101010);
     game.dungeon.add(light);
   }
 
@@ -145,10 +147,12 @@ var dungeon = function () { // start of the dungeon namespace
     tile.add(floor);
 
     // Create the roof
-    var roof = new THREE.Mesh(game.tileCfg.floorGeo, game.tileCfg.material);
-    roof.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT + 0.5, 0), 1);
-    roof.receiveShadow = true;
-    tile.add(roof);
+    if (!game.debug) {
+      var roof = new THREE.Mesh(game.tileCfg.floorGeo, game.tileCfg.material);
+      roof.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT + 0.5, 0), 1);
+      roof.receiveShadow = true;
+      tile.add(roof);
+    }
 
     // Move the tile into it's final resting place.
     var x = (col + 0.5) * TILE_SIZE;
@@ -164,7 +168,7 @@ var dungeon = function () { // start of the dungeon namespace
     // Create the wall
     var wall = new THREE.Mesh(game.tileCfg.xWallGeo, game.tileCfg.material);
     wall.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT / 2.0, 0), 1);
-    wall.castShadow = true;
+    //wall.castShadow = true;
     wall.receiveShadow = true;
 
     // Move the wall into its final resting place
@@ -181,7 +185,7 @@ var dungeon = function () { // start of the dungeon namespace
     // Create the wall
     var wall = new THREE.Mesh(game.tileCfg.zWallGeo, game.tileCfg.material);
     wall.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT / 2.0, 0), 1);
-    wall.castShadow = true;
+    //wall.castShadow = true;
     wall.receiveShadow = true;
 
     // Move the wall into its final resting place
@@ -245,6 +249,19 @@ var dungeon = function () { // start of the dungeon namespace
     game.camera.translateOnAxis(game.cameraCfg.offset, 1.0);
     game.camera.lookAt(game.player.position);
     game.world.add(game.camera);
+
+    var torch = new THREE.SpotLight(0xFFFFFF, 1.0, 30.0, true);
+    torch.position.set(-4, 0, 2);
+    torch.target = game.player;
+    torch.castShadow = true;
+    torch.shadowCameraNear = 0.5;
+    torch.shadowCameraFar = 40.0;
+    torch.shadowMapWidth = 1024;
+    torch.shadowMapHeight = 1024;
+    torch.shadowDarkness = 0.7;
+    if (game.debug)
+      torch.shadowCameraVisible = true;
+    game.camera.add(torch);
   }
 
 
@@ -429,9 +446,11 @@ var dungeon = function () { // start of the dungeon namespace
     makePlayer();
     makeCamera();
 
-    makeDebugGrid();
-    //game.controls = new THREE.TrackballControls(game.camera, gRenderer.domElement);
-    //game.world.fog = null; // Switch off fog when we're using the trackball controls.
+    if (game.debug) {
+      makeDebugGrid();
+      game.controls = new THREE.TrackballControls(game.camera, gRenderer.domElement);
+      game.world.fog = null; // Switch off fog when we're using the trackball controls.
+    }
 
     // Launch into LudumEngine's main loop
     ludum.start('playing');
