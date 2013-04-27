@@ -30,7 +30,6 @@ var dungeon = function () { // start of the dungeon namespace
 
     // Information about the dungeon.
     'dungeonCfg': {
-      /*
       'tiles': new Int32Array([
           0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
           0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
@@ -43,29 +42,17 @@ var dungeon = function () { // start of the dungeon namespace
           0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
           0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
       ]),
-      */
-      'tiles': new Int32Array([
-          1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-      ]),
-      'startTile': 0,
+      'startTile': 8,
       'endTile': 94
     },
 
     // Information about the player.
     'playerCfg': {
-      'runSpeed': 15.0, // The movement speed of the player, in metres/second.
-      'jogSpeed': 7.5,  // The movement speed of the player, in metres/second.
-      'walkSpeed': 3.0, // The movement speed of the player, in metres/second.
-      'turnSpeed': 5.0, // How quickly the player turns, in radians/second(?).
+      'autorun':  false,  // Whether the player automatically runs.
+      'runSpeed': 15.0,   // The movement speed of the player, in metres/second.
+      'jogSpeed': 7.5,    // The movement speed of the player, in metres/second.
+      'walkSpeed': 3.0,   // The movement speed of the player, in metres/second.
+      'turnSpeed': 5.0,   // How quickly the player turns, in radians/second(?).
     },
 
     // Information about the camera.
@@ -121,7 +108,9 @@ var dungeon = function () { // start of the dungeon namespace
     var z = TILE_SIZE * row;
 
     var tile = new THREE.Mesh(geo, material);
+    // Move the tile so that it's bottom left corner is at the origin.
     tile.translateOnAxis(new THREE.Vector3(TILE_SIZE / 2.0, -0.5, TILE_SIZE / 2.0), 1);
+    // Move the tile into it's final resting place.
     tile.translateOnAxis(new THREE.Vector3(x, 0, z), 1);
 
     tile.receiveShadow = true;
@@ -182,8 +171,8 @@ var dungeon = function () { // start of the dungeon namespace
     game.camera.lookAt(game.player.position);
     game.world.add(game.camera);
 
-    game.controls = new THREE.TrackballControls(game.camera, gRenderer.domElement);
-    game.world.fog = null; // Switch off fog when we're using the trackball controls.
+    //game.controls = new THREE.TrackballControls(game.camera, gRenderer.domElement);
+    //game.world.fog = null; // Switch off fog when we're using the trackball controls.
   }
 
 
@@ -235,7 +224,26 @@ var dungeon = function () { // start of the dungeon namespace
     var worldSpaceDelta = new THREE.Vector3().copy(objectSpaceDelta).applyMatrix4(toWorldMatrix);
     var endPos = new THREE.Vector3().addVectors(object3D.position, worldSpaceDelta);
 
-    return (endPos.x < 0 || endPos.z < 0 || endPos.x > 100 || endPos.z > 100);
+    // Figure out which tile you're currently in.
+    var fromCol = Math.floor(object3D.position.x / TILE_SIZE);
+    var fromRow = Math.floor(object3D.position.z / TILE_SIZE);
+
+    // Figure out which tile you're moving to.
+    var toCol = Math.floor(endPos.x / TILE_SIZE);
+    var toRow = Math.floor(endPos.z / TILE_SIZE);
+
+    // If you're moving off the map, you'll hit a wall.
+    if (toCol < 0 || toCol >= MAP_COLS || toRow < 0 || toRow >= MAP_ROWS)
+      return true;
+
+    // Otherwise, if you're trying to move to an empty tile you'll hit a wall.
+    if (fromCol != toCol || fromRow != toRow) {
+      var toI = toRow * MAP_COLS + toCol;
+      return game.dungeonCfg.tiles[toI] == 0;
+    }
+
+    // If neither of those apply, you're good.
+    return false;
   }
 
 
@@ -254,17 +262,29 @@ var dungeon = function () { // start of the dungeon namespace
   {
     var turn = new THREE.Vector3(0.0, 0.0, 0.0);
     var move = new THREE.Vector3(0.0, 0.0, -1.0);
-    var speed = game.playerCfg.jogSpeed;
+    var speed;
 
     if (ludum.isKeyPressed(ludum.keycodes.LEFT))
       turn.y += 1.0;
     if (ludum.isKeyPressed(ludum.keycodes.RIGHT))
       turn.y -= 1.0;
 
-    if (ludum.isKeyPressed(ludum.keycodes.UP))
-      speed = game.playerCfg.runSpeed;
-    else if (ludum.isKeyPressed(ludum.keycodes.DOWN))
-      speed = game.playerCfg.walkSpeed;
+    if (game.playerCfg.autorun) {
+      if (ludum.isKeyPressed(ludum.keycodes.UP))
+        speed = game.playerCfg.runSpeed;
+      else if (ludum.isKeyPressed(ludum.keycodes.DOWN))
+        speed = game.playerCfg.walkSpeed;
+      else
+        speed = game.playerCfg.jogSpeed;
+    }
+    else {
+      if (ludum.isKeyPressed(ludum.keycodes.UP))
+        speed = game.playerCfg.runSpeed;
+      else if (ludum.isKeyPressed(ludum.keycodes.DOWN))
+        speed = -game.playerCfg.walkSpeed;
+      else
+        speed = 0;
+    }
 
     var turnAmount = game.playerCfg.turnSpeed * dt / 1000.0;
     var moveAmount = speed * dt / 1000.0;
