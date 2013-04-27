@@ -173,7 +173,7 @@ var ludum = function () {  // start of the ludum namespace
     if (duration > 0.0) {
       newEvent.wrappedEnter = newEvent.enter;
       newEvent.enter = function () {
-        this.t = game.lastT;
+        this.t = globals.lastT;
         if (this.wrappedEnter)
           this.wrappedEnter();
       }
