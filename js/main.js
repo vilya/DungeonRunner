@@ -8,22 +8,24 @@ var dungeon = function () { // start of the dungeon namespace
   var gRenderStats;
 
   var game = {
+    // three.js objects
     'world': null,    // The top-level Scene object for the world.
-    'camera': null,   // The current camera.
+    'dungeon': null,  // The 3D object for the dungeon.
+    'player': null,   // The 3D object for the player.
+    'camera': null,   // The 3D object for the camera.
     'controls': null, // The current camera controls, if any.
 
-    // Information about the dungeon.
-    'dungeon': {
-      'shape': null,  // The 3D object for the dungeon.
+    // Information about the player.
+    'playerCfg': {
+      'runSpeed': 15.0, // The movement speed of the player, in metres/second.
+      'jogSpeed': 7.5,  // The movement speed of the player, in metres/second.
+      'walkSpeed': 3.0, // The movement speed of the player, in metres/second.
+      'turnSpeed': 5.0, // How quickly the player turns, in radians/second(?).
     },
 
-    // Information about the player.
-    'player': {
-      'shape': null,          // The 3D shape for the player.
-      'runSpeed': 15.0,       // The movement speed of the player, in metres/second.
-      'jogSpeed': 7.5,        // The movement speed of the player, in metres/second.
-      'walkSpeed': 3.0,       // The movement speed of the player, in metres/second.
-      'turnSpeed': 5.0,       // How quickly the player turns, in radians/second(?).
+    // Information about the camera.
+    'cameraCfg': {
+      'offset': new THREE.Vector3(0, 10, 20), // Position of the camera relative to the player.
     },
   };
 
@@ -51,14 +53,14 @@ var dungeon = function () { // start of the dungeon namespace
     material.map.wrapT = THREE.RepeatWrapping;
     material.map.repeat.set(20, 20);
 
-    game.dungeon.shape = new THREE.Mesh(geo, material);
-    game.dungeon.shape.castShadow = true;
-    game.dungeon.shape.receiveShadow = true;
-    game.dungeon.shape.translateOnAxis(new THREE.Vector3(0, -1, 0), 0.5);
-    game.world.add(game.dungeon.shape);
+    game.dungeon = new THREE.Mesh(geo, material);
+    game.dungeon.castShadow = true;
+    game.dungeon.receiveShadow = true;
+    game.dungeon.translateOnAxis(new THREE.Vector3(0, -1, 0), 0.5);
+    game.world.add(game.dungeon);
 
-    var light = _makeDirectionalLight(new THREE.Vector3(60, 60, 0), game.dungeon.shape.position);
-    game.dungeon.shape.add(light);
+    var light = _makeDirectionalLight(new THREE.Vector3(60, 60, 0), game.dungeon.position);
+    game.dungeon.add(light);
   }
 
 
@@ -86,11 +88,11 @@ var dungeon = function () { // start of the dungeon namespace
     var geo = new THREE.CubeGeometry(0.8, 2.0, 0.8);
     var material = new THREE.MeshLambertMaterial({ color: 0x880000 });
 
-    game.player.shape = new THREE.Mesh(geo, material);
-    game.player.shape.castShadow = true;
-    game.player.shape.receiveShadow = true;
-    game.player.shape.translateOnAxis(new THREE.Vector3(0, 1, 0), 1.0);
-    game.world.add(game.player.shape);
+    game.player = new THREE.Mesh(geo, material);
+    game.player.castShadow = true;
+    game.player.receiveShadow = true;
+    game.player.translateOnAxis(new THREE.Vector3(0, 1, 0), 1.0);
+    game.world.add(game.player);
   }
 
 
@@ -104,11 +106,12 @@ var dungeon = function () { // start of the dungeon namespace
     var farClip = 1000.0;
 
     game.camera = new THREE.PerspectiveCamera(fieldOfView, aspectRatio, nearClip, farClip);
-    game.camera.position.set(0, 10, 20);
-    game.camera.lookAt(game.dungeon.shape.position);
+    game.camera.position.copy(game.player.position);
+    game.camera.translateOnAxis(game.cameraCfg.offset, 1.0);
+    game.camera.lookAt(game.player.position);
     game.world.add(game.camera);
 
-    game.controls = new THREE.TrackballControls(game.camera, gRenderer.domElement);
+    //game.controls = new THREE.TrackballControls(game.camera, gRenderer.domElement);
   }
 
 
@@ -119,8 +122,6 @@ var dungeon = function () { // start of the dungeon namespace
   function playingDraw()
   {
     gRenderer.render(game.world, game.camera);
-    if (game.controls)
-      game.controls.update();
     gRenderStats.update();
   }
 
@@ -129,7 +130,7 @@ var dungeon = function () { // start of the dungeon namespace
   {
     var turn = new THREE.Vector3(0.0, 0.0, 0.0);
     var move = new THREE.Vector3(0.0, 0.0, -1.0);
-    var speed = game.player.jogSpeed;
+    var speed = game.playerCfg.jogSpeed;
 
     if (ludum.isKeyPressed(ludum.keycodes.LEFT))
       turn.y += 1.0;
@@ -137,13 +138,26 @@ var dungeon = function () { // start of the dungeon namespace
       turn.y -= 1.0;
 
     if (ludum.isKeyPressed(ludum.keycodes.UP))
-      speed = game.player.runSpeed;
+      speed = game.playerCfg.runSpeed;
     else if (ludum.isKeyPressed(ludum.keycodes.DOWN))
-      speed = game.player.walkSpeed;
+      speed = game.playerCfg.walkSpeed;
+
+    var turnAmount = game.playerCfg.turnSpeed * dt / 1000.0;
+    var moveAmount = speed * dt / 1000.0;
 
     if (turn.y != 0.0)
-      game.player.shape.rotateOnAxis(turn, game.player.turnSpeed * dt / 1000.0);
-    game.player.shape.translateOnAxis(move, speed * dt / 1000.0);
+      game.player.rotateOnAxis(turn, turnAmount);
+    game.player.translateOnAxis(move, moveAmount);
+
+    if (game.controls) {
+      game.controls.update();
+    }
+    else {
+      game.camera.position.copy(game.player.position);
+      game.camera.rotation.copy(game.player.rotation);
+      game.camera.translateOnAxis(game.cameraCfg.offset, 1.0);
+      game.camera.lookAt(game.player.position);
+    }
   }
 
 
@@ -165,11 +179,14 @@ var dungeon = function () { // start of the dungeon namespace
       gRenderer.shadowMapSoft = true;
     }
     else if (caps.canvas) {
-      ludum.showWarning("<strong>Your browser doesn't appear to support WebGL.</strong> You may get lower frame rates and/or poorer image quality as a result. Sorry!");
+      ludum.showWarning("<strong>Your browser doesn't appear to support " +
+                        "WebGL.</strong> You may get lower frame rates and/or " +
+                        "poorer image quality as a result. Sorry!");
       gRenderer = new THREE.CanvasRenderer();
     }
     else {
-      ludum.showError("<strong>Your browser doesn't appear to support WebGL <em>or</em> Canvas.</strong> Unable to continue. Sorry!");
+      ludum.showError("<strong>Your browser doesn't appear to support WebGL " +
+                      "<em>or</em> Canvas.</strong> Unable to continue. Sorry!");
       return;
     }
     gRenderer.setSize(width, height);
@@ -191,8 +208,8 @@ var dungeon = function () { // start of the dungeon namespace
     // Create the world, camera, etc.
     makeWorld();
     makeDungeon();
-    makeCamera();
     makePlayer();
+    makeCamera();
 
     // Launch into LudumEngine's main loop
     ludum.start('playing');
