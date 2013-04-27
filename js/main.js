@@ -4,11 +4,12 @@ var dungeon = function () { // start of the dungeon namespace
   // Constants
   //
 
-  var MAP_ROWS = 10;  // no. of tiles
-  var MAP_COLS = 10;  // no. of tiles.
+  var MAP_ROWS = 10;        // no. of tiles
+  var MAP_COLS = 10;        // no. of tiles.
 
-  var TILE_SIZE = 10; // metres.
-
+  var TILE_SIZE = 10;       // metres.
+  var WALL_HEIGHT = 4;      // metres.
+  var WALL_THICKNESS = 0.1; // metres.
   var MAP_WIDTH = MAP_COLS * TILE_SIZE; // metres
   var MAP_DEPTH = MAP_COLS * TILE_SIZE; // metres
 
@@ -30,20 +31,28 @@ var dungeon = function () { // start of the dungeon namespace
 
     // Information about the dungeon.
     'dungeonCfg': {
-      'tiles': new Int32Array([
-          0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
-          0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
-          0, 0, 1, 1, 0, 1, 1, 1, 1, 0,
-          0, 1, 1, 1, 1, 1, 0, 0, 0, 0,
-          0, 1, 0, 0, 0, 1, 0, 0, 0, 0,
-          0, 1, 0, 0, 1, 1, 0, 0, 0, 0,
-          0, 1, 1, 1, 1, 0, 0, 0, 0, 0,
-          0, 0, 0, 1, 1, 1, 0, 0, 0, 0,
-          0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
-          0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
-      ]),
+      'tiles': [
+          [ 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, ],
+          [ 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, ],
+          [ 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, ],
+          [ 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, ],
+          [ 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, ],
+          [ 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, ],
+          [ 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, ],
+          [ 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, ],
+          [ 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, ],
+          [ 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, ],
+      ],
       'startTile': 8,
-      'endTile': 94
+      'endTile': 94,
+    },
+
+    // Information about the tiles used to build the dungeon.
+    'tileCfg': {
+      'floorGeo': new THREE.CubeGeometry(TILE_SIZE, 1, TILE_SIZE),
+      'xWallGeo': new THREE.CubeGeometry(TILE_SIZE, WALL_HEIGHT, WALL_THICKNESS),
+      'zWallGeo': new THREE.CubeGeometry(WALL_THICKNESS, WALL_HEIGHT, TILE_SIZE),
+      'material': null, // gets initialised in makeDungeon
     },
 
     // Information about the player.
@@ -57,7 +66,7 @@ var dungeon = function () { // start of the dungeon namespace
 
     // Information about the camera.
     'cameraCfg': {
-      'offset': new THREE.Vector3(0, 10, 20), // Position of the camera relative to the player.
+      'offset': new THREE.Vector3(0, (WALL_HEIGHT - 1) * 0.8, 10), // Position of the camera relative to the player.
     },
   };
 
@@ -78,20 +87,46 @@ var dungeon = function () { // start of the dungeon namespace
     game.dungeon = new THREE.Object3D();
     game.world.add(game.dungeon);
 
-    var geo = new THREE.CubeGeometry(TILE_SIZE, 1, TILE_SIZE);
-    var material = new THREE.MeshLambertMaterial({
+    game.tileCfg.material = new THREE.MeshLambertMaterial({
         color: 0xAAAAAA,
         map: THREE.ImageUtils.loadTexture('img/rock.png')
     });
-    material.map.wrapS = THREE.RepeatWrapping;
-    material.map.wrapT = THREE.RepeatWrapping;
-    material.map.repeat.set(2, 2);
+    game.tileCfg.material.map.wrapS = THREE.RepeatWrapping;
+    game.tileCfg.material.map.wrapT = THREE.RepeatWrapping;
+    game.tileCfg.material.map.repeat.set(2, 2);
 
+    // Make the floor tiles
     for (var r = 0, endR = MAP_ROWS; r < endR; r++) {
       for (var c = 0, endC = MAP_COLS; c < endC; c++) {
-        var i = r * MAP_COLS + c;
-        _makeTile(r, c, game.dungeonCfg.tiles[i], geo, material);
+        if (game.dungeonCfg.tiles[r][c] != 0)
+          _makeTile(r, c);
       }
+    }
+
+    // Make the +z walls
+    for (var r = 0, endR = MAP_ROWS; r < endR; r++) {
+      var wasInTile = false;
+      for (var c = 0, endC = MAP_COLS; c < endC; c++) {
+        var inTile = (game.dungeonCfg.tiles[r][c] != 0);
+        if (inTile != wasInTile)
+          _makeZWall(r, c);
+        wasInTile = inTile;
+      }
+      if (wasInTile)
+        _makeZWall(r, MAP_COLS);
+    }
+
+    // Make the +x walls
+    for (var c = 0, endC = MAP_COLS; c < endC; c++) {
+      var wasInTile = false;
+      for (var r = 0, endR = MAP_ROWS; r < endR; r++) {
+        var inTile = (game.dungeonCfg.tiles[r][c] != 0);
+        if (inTile != wasInTile)
+          _makeXWall(r, c);
+        wasInTile = inTile;
+      }
+      if (wasInTile)
+        _makeXWall(MAP_ROWS, c);
     }
 
     var light = _makeDirectionalLight(new THREE.Vector3(60, 60, 0), game.dungeon.position);
@@ -99,22 +134,62 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
-  function _makeTile(row, col, tileType, geo, material)
+  function _makeTile(row, col)
   {
-    if (tileType == 0)
-      return;
+    var tile = new THREE.Object3D();
 
-    var x = TILE_SIZE * col;
-    var z = TILE_SIZE * row;
+    // Create the floor
+    var floor = new THREE.Mesh(game.tileCfg.floorGeo, game.tileCfg.material);
+    floor.translateOnAxis(new THREE.Vector3(0, -0.5, 0), 1);
+    floor.receiveShadow = true;
+    tile.add(floor);
 
-    var tile = new THREE.Mesh(geo, material);
-    // Move the tile so that it's bottom left corner is at the origin.
-    tile.translateOnAxis(new THREE.Vector3(TILE_SIZE / 2.0, -0.5, TILE_SIZE / 2.0), 1);
+    // Create the roof
+    var roof = new THREE.Mesh(game.tileCfg.floorGeo, game.tileCfg.material);
+    roof.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT + 0.5, 0), 1);
+    roof.receiveShadow = true;
+    tile.add(roof);
+
     // Move the tile into it's final resting place.
+    var x = (col + 0.5) * TILE_SIZE;
+    var z = (row + 0.5) * TILE_SIZE;
     tile.translateOnAxis(new THREE.Vector3(x, 0, z), 1);
 
-    tile.receiveShadow = true;
     game.dungeon.add(tile);
+  }
+
+
+  function _makeXWall(row, col)
+  {
+    // Create the wall
+    var wall = new THREE.Mesh(game.tileCfg.xWallGeo, game.tileCfg.material);
+    wall.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT / 2.0, 0), 1);
+    wall.castShadow = true;
+    wall.receiveShadow = true;
+
+    // Move the wall into its final resting place
+    var x = (col + 0.5) * TILE_SIZE;
+    var z = row * TILE_SIZE;
+    wall.translateOnAxis(new THREE.Vector3(x, 0, z), 1);
+
+    game.dungeon.add(wall);
+  }
+
+
+  function _makeZWall(row, col)
+  {
+    // Create the wall
+    var wall = new THREE.Mesh(game.tileCfg.zWallGeo, game.tileCfg.material);
+    wall.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT / 2.0, 0), 1);
+    wall.castShadow = true;
+    wall.receiveShadow = true;
+
+    // Move the wall into its final resting place
+    var x = col * TILE_SIZE;
+    var z = (row + 0.5) * TILE_SIZE;
+    wall.translateOnAxis(new THREE.Vector3(x, 0, z), 1);
+
+    game.dungeon.add(wall);
   }
 
 
@@ -170,23 +245,22 @@ var dungeon = function () { // start of the dungeon namespace
     game.camera.translateOnAxis(game.cameraCfg.offset, 1.0);
     game.camera.lookAt(game.player.position);
     game.world.add(game.camera);
-
-    //game.controls = new THREE.TrackballControls(game.camera, gRenderer.domElement);
-    //game.world.fog = null; // Switch off fog when we're using the trackball controls.
   }
 
 
   function makeDebugGrid()
   {
     var grid = new THREE.Mesh(
-        new THREE.PlaneGeometry(MAP_WIDTH * 2, MAP_DEPTH * 2, MAP_COLS * 2, MAP_ROWS * 2),
+        new THREE.PlaneGeometry(MAP_WIDTH, MAP_DEPTH, MAP_COLS, MAP_ROWS),
         new THREE.MeshBasicMaterial({
           'color': 0x8888CC,
           'wireframe': true,
           'wireframeLinewidth': 2
         })
     );
-    grid.lookAt(new THREE.Vector3(0, 1, 0));
+    grid.applyMatrix(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    grid.translateOnAxis(new THREE.Vector3(MAP_WIDTH / 2.0, MAP_DEPTH / 2.0, 0.0), 1);
+    //grid.lookAt(new THREE.Vector3(0, 1, 0));
     game.world.add(grid);
 
     var textMaterial = new THREE.MeshBasicMaterial({ 'color': 0xCC0000 });
@@ -237,10 +311,8 @@ var dungeon = function () { // start of the dungeon namespace
       return true;
 
     // Otherwise, if you're trying to move to an empty tile you'll hit a wall.
-    if (fromCol != toCol || fromRow != toRow) {
-      var toI = toRow * MAP_COLS + toCol;
-      return game.dungeonCfg.tiles[toI] == 0;
-    }
+    if (fromCol != toCol || fromRow != toRow)
+      return game.dungeonCfg.tiles[toRow][toCol] == 0;
 
     // If neither of those apply, you're good.
     return false;
@@ -346,7 +418,7 @@ var dungeon = function () { // start of the dungeon namespace
 		document.getElementById( 'viewport' ).appendChild( gRenderStats.domElement );
 		
     // Configure ludum.js
-    ludum.useKeyboard();        // Install's ludum.js' keyboard event handlers.
+    ludum.useKeyboard(); // Install's ludum.js' keyboard event handlers.
 
     // Set up the game states.
     ludum.addState('playing', { 'draw': playingDraw, 'update': playingUpdate });
@@ -358,6 +430,8 @@ var dungeon = function () { // start of the dungeon namespace
     makeCamera();
 
     makeDebugGrid();
+    //game.controls = new THREE.TrackballControls(game.camera, gRenderer.domElement);
+    //game.world.fog = null; // Switch off fog when we're using the trackball controls.
 
     // Launch into LudumEngine's main loop
     ludum.start('playing');
