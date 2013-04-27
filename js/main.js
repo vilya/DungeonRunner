@@ -6,7 +6,6 @@ var dungeon = function () { // start of the dungeon namespace
 
   var gRenderer;
   var gRenderStats;
-  var gPhysicsStats;
 
   var game = {
     'world': null,    // The top-level Scene object for the world.
@@ -20,15 +19,11 @@ var dungeon = function () { // start of the dungeon namespace
 
     // Information about the player.
     'player': {
-      // Configuration - this generally won't change during the game.
       'shape': null,          // The 3D shape for the player.
-      'moveSpeed': 20.0,      // The movement speed of the player, in metres/second.
-      'turnSpeed': 5.0,      // How quickly the player turns, in radians/second(?).
-      'jumpSpeed': 1000.0,    // The starting speed for a jump, in metres/second.
-      'jumpDuration': 0.8,    // How long before the player can jump again, in seconds.
-
-      // State - this keeps track of what's happening during the game.
-      'jumpT': 0.0,           // When did the player last start a jump (in seconds since the start of the level).
+      'runSpeed': 15.0,       // The movement speed of the player, in metres/second.
+      'jogSpeed': 7.5,        // The movement speed of the player, in metres/second.
+      'walkSpeed': 3.0,       // The movement speed of the player, in metres/second.
+      'turnSpeed': 5.0,       // How quickly the player turns, in radians/second(?).
     },
   };
 
@@ -39,34 +34,24 @@ var dungeon = function () { // start of the dungeon namespace
 
   function makeWorld()
   {
-    game.world = new Physijs.Scene({ fixedTimeStep: 1 / 60.0 });
-    game.world.setGravity(new THREE.Vector3(0, -20, 0));
-    game.world.addEventListener('update', function() {
-        ludum.update();
-        game.world.simulate(undefined, 2);
-        gPhysicsStats.update();
-    });
+    game.world = new THREE.Scene();
+    game.world.fog = new THREE.Fog(0x000000, 10, 100);
   }
 
 
   function makeDungeon()
   {
     var geo = new THREE.CubeGeometry(100, 1, 100);
-    var material = Physijs.createMaterial(
-      new THREE.MeshLambertMaterial({
+    var material = new THREE.MeshLambertMaterial({
         color: 0xAAAAAA,
         map: THREE.ImageUtils.loadTexture('img/rock.png')
-      }),
-      0.8,  // high friction
-      0.4   // low restitution
-    );
-    var mass = 0.0;
+    });
 
     material.map.wrapS = THREE.RepeatWrapping;
     material.map.wrapT = THREE.RepeatWrapping;
     material.map.repeat.set(20, 20);
 
-    game.dungeon.shape = new Physijs.BoxMesh(geo, material, mass);
+    game.dungeon.shape = new THREE.Mesh(geo, material);
     game.dungeon.shape.castShadow = true;
     game.dungeon.shape.receiveShadow = true;
     game.dungeon.shape.translateOnAxis(new THREE.Vector3(0, -1, 0), 0.5);
@@ -100,17 +85,11 @@ var dungeon = function () { // start of the dungeon namespace
   {
     var geo = new THREE.CubeGeometry(0.8, 2.0, 0.8);
     var material = new THREE.MeshLambertMaterial({ color: 0x880000 });
-    var mass = 80.0;
 
-    game.player.shape = new Physijs.BoxMesh(geo, material, mass);
+    game.player.shape = new THREE.Mesh(geo, material);
     game.player.shape.castShadow = true;
     game.player.shape.receiveShadow = true;
-    game.player.shape.addEventListener('collision',
-      function (collidedWith, linearVelocity, angularVelocity) {
-      }
-    );
-    game.player.shape.translateOnAxis(new THREE.Vector3(0, 1, 0), 1.0 + 10.0);
-    //game.player.shape.setAngularFactor(new THREE.Vector3(0, 1, 0));
+    game.player.shape.translateOnAxis(new THREE.Vector3(0, 1, 0), 1.0);
     game.world.add(game.player.shape);
   }
 
@@ -146,34 +125,25 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
-  function playingUpdate()
+  function playingUpdate(dt)
   {
     var turn = new THREE.Vector3(0.0, 0.0, 0.0);
-    var move = new THREE.Vector3(0.0, 0.0, 0.0);
-    var jump = new THREE.Vector3(0.0, game.player.jumpSpeed, 0.0);
+    var move = new THREE.Vector3(0.0, 0.0, -1.0);
+    var speed = game.player.jogSpeed;
 
     if (ludum.isKeyPressed(ludum.keycodes.LEFT))
-      turn.y += game.player.turnSpeed;
+      turn.y += 1.0;
     if (ludum.isKeyPressed(ludum.keycodes.RIGHT))
-      turn.y -= game.player.turnSpeed;
+      turn.y -= 1.0;
 
     if (ludum.isKeyPressed(ludum.keycodes.UP))
-      move.z -= game.player.moveSpeed;
-    if (ludum.isKeyPressed(ludum.keycodes.DOWN))
-      move.z += game.player.moveSpeed;
+      speed = game.player.runSpeed;
+    else if (ludum.isKeyPressed(ludum.keycodes.DOWN))
+      speed = game.player.walkSpeed;
 
-    var timeSinceLastJump = ludum.globals.stateT - game.player.jumpT;
-    var canJump = timeSinceLastJump > game.player.jumpDuration;
-    var jumping = canJump && ludum.isKeyPressed(' ');
-    if (jumping) {
-      move.y = game.player.jumpSpeed;
-      game.player.jumpT = ludum.globals.stateT;
-    }
-
-    move.applyMatrix4(new THREE.Matrix4().extractRotation(game.player.shape.matrix));
-
-    game.player.shape.setAngularVelocity(turn);
-    game.player.shape.applyCentralImpulse(move);
+    if (turn.y != 0.0)
+      game.player.shape.rotateOnAxis(turn, game.player.turnSpeed * dt / 1000.0);
+    game.player.shape.translateOnAxis(move, speed * dt / 1000.0);
   }
 
 
@@ -205,26 +175,15 @@ var dungeon = function () { // start of the dungeon namespace
     gRenderer.setSize(width, height);
     document.getElementById('viewport').appendChild(gRenderer.domElement);
 
-    // Set up for physi.js
-    Physijs.scripts.worker = "js/physijs_worker.js";
-    Physijs.scripts.ammo = 'ammo.js';
-
-    // Set up the performance graphs (remember to turn these off for the final game!)
+    // Set up the performance graph (remember to turn this off for the final game!)
 		gRenderStats = new Stats();
 		gRenderStats.domElement.style.position = 'absolute';
 		gRenderStats.domElement.style.top = '0px';
 		gRenderStats.domElement.style.zIndex = 100;
 		document.getElementById( 'viewport' ).appendChild( gRenderStats.domElement );
 		
-		gPhysicsStats = new Stats();
-		gPhysicsStats.domElement.style.position = 'absolute';
-		gPhysicsStats.domElement.style.top = '50px';
-		gPhysicsStats.domElement.style.zIndex = 100;
-		document.getElementById( 'viewport' ).appendChild( gPhysicsStats.domElement );
-
     // Configure ludum.js
     ludum.useKeyboard();        // Install's ludum.js' keyboard event handlers.
-    ludum.useExternalUpdates(); // We'll be using Physi.js to drive the updates.
 
     // Set up the game states.
     ludum.addState('playing', { 'draw': playingDraw, 'update': playingUpdate });
@@ -234,9 +193,6 @@ var dungeon = function () { // start of the dungeon namespace
     makeDungeon();
     makeCamera();
     makePlayer();
-
-    // Kick off the physics engine.
-    game.world.simulate(undefined, 2);
 
     // Launch into LudumEngine's main loop
     ludum.start('playing');
