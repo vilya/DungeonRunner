@@ -70,10 +70,10 @@ var dungeon = function () { // start of the dungeon namespace
     light.position.copy(position);
     light.lookAt(target);
     light.castShadow = true;
-    light.shadowCameraLeft = -60;
-    light.shadowCameraTop = -60;
-    light.shadowCameraRight = 60;
-    light.shadowCameraBottom = 60;
+    light.shadowCameraLeft = -20;
+    light.shadowCameraTop = -20;
+    light.shadowCameraRight = 20;
+    light.shadowCameraBottom = 20;
     light.shadowCameraNear = 10;
     light.shadowCameraFar = 150;
     light.shadowBias = -0.01;
