@@ -1,6 +1,19 @@
 var dungeon = function () { // start of the dungeon namespace
 
   //
+  // Constants
+  //
+
+  var MAP_ROWS = 10;  // no. of tiles
+  var MAP_COLS = 10;  // no. of tiles.
+
+  var TILE_SIZE = 10; // metres.
+
+  var MAP_WIDTH = MAP_COLS * TILE_SIZE; // metres
+  var MAP_DEPTH = MAP_COLS * TILE_SIZE; // metres
+
+
+  //
   // Global variables
   //
 
@@ -14,6 +27,38 @@ var dungeon = function () { // start of the dungeon namespace
     'player': null,   // The 3D object for the player.
     'camera': null,   // The 3D object for the camera.
     'controls': null, // The current camera controls, if any.
+
+    // Information about the dungeon.
+    'dungeonCfg': {
+      /*
+      'tiles': new Int32Array([
+          0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+          0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+          0, 0, 1, 1, 0, 1, 1, 1, 1, 0,
+          0, 1, 1, 1, 1, 1, 0, 0, 0, 0,
+          0, 1, 0, 0, 0, 1, 0, 0, 0, 0,
+          0, 1, 0, 0, 1, 1, 0, 0, 0, 0,
+          0, 1, 1, 1, 1, 0, 0, 0, 0, 0,
+          0, 0, 0, 1, 1, 1, 0, 0, 0, 0,
+          0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
+          0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
+      ]),
+      */
+      'tiles': new Int32Array([
+          1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+      ]),
+      'startTile': 0,
+      'endTile': 94
+    },
 
     // Information about the player.
     'playerCfg': {
@@ -43,24 +88,44 @@ var dungeon = function () { // start of the dungeon namespace
 
   function makeDungeon()
   {
-    var geo = new THREE.CubeGeometry(100, 1, 100);
+    game.dungeon = new THREE.Object3D();
+    game.world.add(game.dungeon);
+
+    var geo = new THREE.CubeGeometry(TILE_SIZE, 1, TILE_SIZE);
     var material = new THREE.MeshLambertMaterial({
         color: 0xAAAAAA,
         map: THREE.ImageUtils.loadTexture('img/rock.png')
     });
-
     material.map.wrapS = THREE.RepeatWrapping;
     material.map.wrapT = THREE.RepeatWrapping;
-    material.map.repeat.set(20, 20);
+    material.map.repeat.set(2, 2);
 
-    game.dungeon = new THREE.Mesh(geo, material);
-    game.dungeon.castShadow = true;
-    game.dungeon.receiveShadow = true;
-    game.dungeon.translateOnAxis(new THREE.Vector3(0, -1, 0), 0.5);
-    game.world.add(game.dungeon);
+    for (var r = 0, endR = MAP_ROWS; r < endR; r++) {
+      for (var c = 0, endC = MAP_COLS; c < endC; c++) {
+        var i = r * MAP_COLS + c;
+        _makeTile(r, c, game.dungeonCfg.tiles[i], geo, material);
+      }
+    }
 
     var light = _makeDirectionalLight(new THREE.Vector3(60, 60, 0), game.dungeon.position);
     game.dungeon.add(light);
+  }
+
+
+  function _makeTile(row, col, tileType, geo, material)
+  {
+    if (tileType == 0)
+      return;
+
+    var x = TILE_SIZE * col;
+    var z = TILE_SIZE * row;
+
+    var tile = new THREE.Mesh(geo, material);
+    tile.translateOnAxis(new THREE.Vector3(TILE_SIZE / 2.0, -0.5, TILE_SIZE / 2.0), 1);
+    tile.translateOnAxis(new THREE.Vector3(x, 0, z), 1);
+
+    tile.receiveShadow = true;
+    game.dungeon.add(tile);
   }
 
 
@@ -88,10 +153,16 @@ var dungeon = function () { // start of the dungeon namespace
     var geo = new THREE.CubeGeometry(0.8, 2.0, 0.8);
     var material = new THREE.MeshLambertMaterial({ color: 0x880000 });
 
+    var startRow = game.dungeonCfg.startTile / MAP_COLS;
+    var startCol = game.dungeonCfg.startTile % MAP_COLS;
+    var startPos = tileCenter(startRow, startCol);
+    startPos.y += 1;
+
     game.player = new THREE.Mesh(geo, material);
     game.player.castShadow = true;
     game.player.receiveShadow = true;
-    game.player.translateOnAxis(new THREE.Vector3(0, 1, 0), 1.0);
+    game.player.translateOnAxis(startPos, 1.0);
+    game.player.rotateOnAxis(new THREE.Vector3(0, 1, 0), Math.PI);
     game.world.add(game.player);
   }
 
@@ -111,7 +182,39 @@ var dungeon = function () { // start of the dungeon namespace
     game.camera.lookAt(game.player.position);
     game.world.add(game.camera);
 
-    //game.controls = new THREE.TrackballControls(game.camera, gRenderer.domElement);
+    game.controls = new THREE.TrackballControls(game.camera, gRenderer.domElement);
+    game.world.fog = null; // Switch off fog when we're using the trackball controls.
+  }
+
+
+  function makeDebugGrid()
+  {
+    var grid = new THREE.Mesh(
+        new THREE.PlaneGeometry(MAP_WIDTH * 2, MAP_DEPTH * 2, MAP_COLS * 2, MAP_ROWS * 2),
+        new THREE.MeshBasicMaterial({
+          'color': 0x8888CC,
+          'wireframe': true,
+          'wireframeLinewidth': 2
+        })
+    );
+    grid.lookAt(new THREE.Vector3(0, 1, 0));
+    game.world.add(grid);
+
+    var textMaterial = new THREE.MeshBasicMaterial({ 'color': 0xCC0000 });
+
+    var originLabelGeo = new THREE.TextGeometry("origin", { 'size': 1.0, 'height': 0.2 });
+    var originLabel = new THREE.Mesh(originLabelGeo, textMaterial);
+    game.world.add(originLabel);
+
+    var xLabelGeo = new THREE.TextGeometry("+x", { 'size': 1.0, 'height': 0.2 });
+    var xLabel = new THREE.Mesh(xLabelGeo, textMaterial);
+    xLabel.translateOnAxis(new THREE.Vector3(1, 0, 0), 100);
+    game.world.add(xLabel);
+
+    var zLabelGeo = new THREE.TextGeometry("+z", { 'size': 1.0, 'height': 0.2 });
+    var zLabel = new THREE.Mesh(zLabelGeo, textMaterial);
+    zLabel.translateOnAxis(new THREE.Vector3(0, 0, 1), 100);
+    game.world.add(zLabel);
   }
 
 
@@ -119,13 +222,20 @@ var dungeon = function () { // start of the dungeon namespace
   // Functions
   //
 
+  function tileCenter(row, col) {
+    var x = (col + 0.5) * TILE_SIZE;
+    var z = (row + 0.5) * TILE_SIZE;
+    return new THREE.Vector3(x, 0, z);
+  }
+
+
   function willHitWall(object3D, objectSpaceDelta)
   {
-    var worldSpaceDelta = new THREE.Vector3().copy(objectSpaceDelta);
-    object3D.localToWorld(worldSpaceDelta);
-
+    var toWorldMatrix = new THREE.Matrix4().extractRotation(object3D.matrixWorld);
+    var worldSpaceDelta = new THREE.Vector3().copy(objectSpaceDelta).applyMatrix4(toWorldMatrix);
     var endPos = new THREE.Vector3().addVectors(object3D.position, worldSpaceDelta);
-    return (Math.abs(endPos.x) > 100.0 || Math.abs(endPos.y) > 100.0 || Math.abs(endPos.z) > 100.0);
+
+    return (endPos.x < 0 || endPos.z < 0 || endPos.x > 100 || endPos.z > 100);
   }
 
 
@@ -226,6 +336,8 @@ var dungeon = function () { // start of the dungeon namespace
     makeDungeon();
     makePlayer();
     makeCamera();
+
+    makeDebugGrid();
 
     // Launch into LudumEngine's main loop
     ludum.start('playing');
