@@ -15,7 +15,7 @@ deploy_dir:
 
 .PHONY: fix_perms
 fix_perms:
-	chmod a-x Makefile index.html js/* 
+	chmod a-x Makefile index.html README.md js/* 
 
 
 clean:

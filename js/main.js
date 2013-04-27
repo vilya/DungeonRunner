@@ -8,10 +8,28 @@ var dungeon = function () { // start of the dungeon namespace
   var gRenderStats;
   var gPhysicsStats;
 
-  var gWorld;
-  var gCamera;
-  var gDungeon;
-  var gPlayer;
+  var game = {
+    'world': null,    // The top-level Scene object for the world.
+    'camera': null,   // The current camera.
+    'controls': null, // The current camera controls, if any.
+
+    // Information about the dungeon.
+    'dungeon': {
+      'shape': null,  // The 3D object for the dungeon.
+    },
+
+    // Information about the player.
+    'player': {
+      // Configuration - this generally won't change during the game.
+      'shape': null,          // The 3D shape for the player.
+      'moveSpeed': 20.0,      // The movement speed of the player, in metres/second.
+      'jumpSpeed': 1000.0,    // The starting speed for a jump, in metres/second.
+      'jumpDuration': 0.8,    // How long before the player can jump again, in seconds.
+
+      // State - this keeps track of what's happening during the game.
+      'jumpT': 0.0,           // When did the player last start a jump (in seconds since the start of the level).
+    },
+  };
 
 
   //
@@ -20,36 +38,34 @@ var dungeon = function () { // start of the dungeon namespace
 
   function makeWorld()
   {
-    var world = new Physijs.Scene({ fixedTimeStep: 1 / 60.0 });
-    world.setGravity(new THREE.Vector3(0, -20, 0));
-    world.addEventListener('update', function() {
+    game.world = new Physijs.Scene({ fixedTimeStep: 1 / 60.0 });
+    game.world.setGravity(new THREE.Vector3(0, -20, 0));
+    game.world.addEventListener('update', function() {
         ludum.update();
-        gWorld.simulate(undefined, 2);
+        game.world.simulate(undefined, 2);
         gPhysicsStats.update();
     });
-    return world;
   }
 
 
   function makeDungeon()
   {
+    var geo = new THREE.CubeGeometry(100, 1, 100);
     var material = Physijs.createMaterial(
       new THREE.MeshLambertMaterial({ color: 0xAAAAAA }),
       0.8,  // high friction
       0.4   // low restitution
     );
-    
-    var geometry = new THREE.CubeGeometry(100, 1, 100);
+    var mass = 0.0;
 
-    var shape = new Physijs.BoxMesh(geometry, material, 0);
-    shape.castShadow = true;
-    shape.receiveShadow = true;
-    shape.translateOnAxis(new THREE.Vector3(0, -1, 0), 0.5);
+    game.dungeon.shape = new Physijs.BoxMesh(geo, material, mass);
+    game.dungeon.shape.castShadow = true;
+    game.dungeon.shape.receiveShadow = true;
+    game.dungeon.shape.translateOnAxis(new THREE.Vector3(0, -1, 0), 0.5);
+    game.world.add(game.dungeon.shape);
 
-    var light = _makeDirectionalLight(new THREE.Vector3(60, 60, 0), shape.position);
-    shape.add(light);
-
-    return shape;
+    var light = _makeDirectionalLight(new THREE.Vector3(60, 60, 0), game.dungeon.shape.position);
+    game.dungeon.shape.add(light);
   }
 
 
@@ -74,18 +90,19 @@ var dungeon = function () { // start of the dungeon namespace
 
   function makePlayer()
   {
-    var playerGeo = new THREE.CubeGeometry(0.8, 2.0, 0.8);
-    var playerMaterial = new THREE.MeshLambertMaterial({ color: 0x880000 });
-    var playerMass = 80.0;
-    var player = new Physijs.BoxMesh(playerGeo, playerMaterial, playerMass);
-    player.castShadow = true;
-    player.receiveShadow = true;
-    player.addEventListener('collision',
+    var geo = new THREE.CubeGeometry(0.8, 2.0, 0.8);
+    var material = new THREE.MeshLambertMaterial({ color: 0x880000 });
+    var mass = 80.0;
+
+    game.player.shape = new Physijs.BoxMesh(geo, material, mass);
+    game.player.shape.castShadow = true;
+    game.player.shape.receiveShadow = true;
+    game.player.shape.addEventListener('collision',
       function (collidedWith, linearVelocity, angularVelocity) {
       }
     );
-    player.translateOnAxis(new THREE.Vector3(0, 1, 0), 1.0);
-    return player;
+    game.player.shape.translateOnAxis(new THREE.Vector3(0, 1, 0), 1.0 + 10.0);
+    game.world.add(game.player.shape);
   }
 
 
@@ -98,13 +115,12 @@ var dungeon = function () { // start of the dungeon namespace
     var nearClip = 1.0;
     var farClip = 1000.0;
 
-    var camera = new THREE.PerspectiveCamera(
-      fieldOfView,
-      aspectRatio,
-      nearClip,
-      farClip);
+    game.camera = new THREE.PerspectiveCamera(fieldOfView, aspectRatio, nearClip, farClip);
+    game.camera.position.set(60, 60, 60);
+    game.camera.lookAt(game.dungeon.shape.position);
+    game.world.add(game.camera);
 
-    return camera;
+    game.controls = new THREE.TrackballControls(game.camera, gRenderer.domElement);
   }
 
 
@@ -114,13 +130,37 @@ var dungeon = function () { // start of the dungeon namespace
 
   function playingDraw()
   {
-    gRenderer.render(gWorld, gCamera);
+    gRenderer.render(game.world, game.camera);
+    if (game.controls)
+      game.controls.update();
     gRenderStats.update();
   }
 
 
   function playingUpdate()
   {
+    var dir = new THREE.Vector3(0.0, 0.0, 0.0);
+
+    if (ludum.isKeyPressed(ludum.keycodes.LEFT))
+      dir.x -= 1.0;
+    if (ludum.isKeyPressed(ludum.keycodes.RIGHT))
+      dir.x += 1.0;
+    if (ludum.isKeyPressed(ludum.keycodes.UP))
+      dir.z -= 1.0;
+    if (ludum.isKeyPressed(ludum.keycodes.DOWN))
+      dir.z += 1.0;
+
+    if (dir.length() > 0.0)
+      dir = dir.normalize().multiplyScalar(game.player.moveSpeed);
+
+    var timeSinceLastJump = ludum.globals.stateT - game.player.jumpT;
+    var canJump = timeSinceLastJump > game.player.jumpDuration;
+    if (ludum.isKeyPressed(' ') && canJump) {
+      dir.setY(game.player.jumpSpeed);
+      game.player.jumpT = ludum.globals.stateT;
+    }
+
+    game.player.shape.applyCentralImpulse(dir);
   }
 
 
@@ -177,17 +217,13 @@ var dungeon = function () { // start of the dungeon namespace
     ludum.addState('playing', { 'draw': playingDraw, 'update': playingUpdate });
 
     // Create the world, camera, etc.
-    gWorld = makeWorld();
-    gDungeon = makeDungeon();
-    gCamera = makeCamera();
-    gPlayer = makePlayer();
+    makeWorld();
+    makeDungeon();
+    makeCamera();
+    makePlayer();
 
-    gWorld.add(gDungeon);
-    gWorld.add(gCamera);
-    gWorld.add(gPlayer);
-
-    gCamera.position.set(60, 60, 60);
-    gCamera.lookAt(gPlayer.position);
+    // Kick off the physics engine.
+    game.world.simulate(undefined, 2);
 
     // Launch into LudumEngine's main loop
     ludum.start('playing');
