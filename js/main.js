@@ -105,6 +105,7 @@ var dungeon = function () { // start of the dungeon namespace
         'color': 0xEEEE00,
         'emissive': 0x1E1E00,
     });
+    game.lootCfg.geo.computeBoundingBox();
 
     game.dungeon = new THREE.Object3D();
     game.world.add(game.dungeon);
@@ -246,6 +247,7 @@ var dungeon = function () { // start of the dungeon namespace
     var z = (row + 0.5) * TILE_SIZE;
     loot.translateOnAxis(new THREE.Vector3(x, 0, z), 1);
 
+    game.loot.push(loot);
     game.dungeon.add(loot);
   }
 
@@ -254,6 +256,8 @@ var dungeon = function () { // start of the dungeon namespace
   {
     var geo = new THREE.CubeGeometry(0.8, 2.0, 0.8);
     var material = new THREE.MeshLambertMaterial({ color: 0x880000 });
+
+    geo.computeBoundingBox();
 
     var startRow = game.dungeonCfg.startTile / game.dungeonCfg.cols;
     var startCol = game.dungeonCfg.startTile % game.dungeonCfg.cols;
@@ -370,6 +374,42 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
+  function centroid(obj)
+  {
+    var c = new THREE.Vector3();
+    c.addVectors(obj.geometry.boundingBox.min, obj.geometry.boundingBox.max);
+    c.divideScalar(2.0);
+    return c;
+  }
+
+
+  function objRadius(obj)
+  {
+    var dim = new THREE.Vector3();
+    dim.subVectors(obj.geometry.boundingBox.max, obj.geometry.boundingBox.min);
+  
+    var r = (dim.x + dim.z) / 2.0;
+    return r;
+  }
+
+
+  // Checks whether two objects overlap in the horizontal plane.
+  function overlapping(objA, objB)
+  {
+    var cA = centroid(objA);
+    var cB = centroid(objB);
+    objA.localToWorld(cA);
+    objB.localToWorld(cB);
+
+    var rA = objRadius(objA);
+    var rB = objRadius(objB);
+    
+    var distance = new THREE.Vector3().subVectors(cA, cB).length();
+    var result = distance < (rA + rB);
+    return result;
+  }
+
+
   //
   // Functions for the 'playing' state.
   //
@@ -383,6 +423,15 @@ var dungeon = function () { // start of the dungeon namespace
 
   function playingUpdate(dt)
   {
+    // Collect loot
+    for (var i = game.loot.length - 1; i >= 0; i--) {
+      if (overlapping(game.player, game.loot[i])) {
+        game.dungeon.remove(game.loot[i]);
+        game.loot.splice(i, 1);
+      }
+    }
+
+    // Movement
     var turn = new THREE.Vector3(0.0, 0.0, 0.0);
     var move = new THREE.Vector3(0.0, 0.0, -1.0);
     var speed;
