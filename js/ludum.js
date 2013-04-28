@@ -55,6 +55,7 @@ var ludum = function () {  // start of the ludum namespace
   // Holds game configuration data - stuff that shouldn't change once set up.
   var config = {
     'states': {},
+    'sounds': {},
     'externalUpdate': false,  // If false, ludum.js calls _update() during the render loop. If true, it doesn't and you're expected to call ludum.update() from your own code.
   };
 
@@ -594,6 +595,45 @@ var ludum = function () {  // start of the ludum namespace
 
 
   //
+  // Sound effects
+  //
+
+  function addSound(name, sources) {
+    var audioElement = document.createElement('audio');
+    for (var i = 0, endI = sources.length; i < endI; i++) {
+      var sourceElement = document.createElement('source');
+      sourceElement.src = sources[i];
+      audioElement.appendChild(sourceElement);
+    }
+    config.sounds[name] = { 'name': name, 'audioElement': audioElement };
+  }
+
+
+  function playSound(name) {
+    var sound = config.sounds[name];
+    if (sound === undefined)
+      return;
+
+    if (sound.audioElement.ended) {
+      if (sound.audioElement.seekable.length > 0)
+        sound.audioElement.currentTime = sound.audioElement.seekable.start(0);
+      else
+        sound.audioElement.currentTime = 0;
+    }
+    sound.audioElement.play();
+  }
+
+
+  function stopSound(name) {
+    var sound = config.sounds[name];
+    if (sound === undefined)
+      return;
+
+    sound.audioElement.pause();
+  }
+
+
+  //
   // Browser-related methods
   //
 
@@ -684,6 +724,10 @@ var ludum = function () {  // start of the ludum namespace
     'useMouse': useMouse,
     'anyButtonPressed': anyButtonPressed,
     'isButtonPressed': isButtonPressed,
+    // Sound functions
+    'addSound': addSound,
+    'playSound': playSound,
+    'stopSound': stopSound,
     // Browser functions
     'browserCapabilities': browserCapabilities,
     'showWarning': showWarning,
