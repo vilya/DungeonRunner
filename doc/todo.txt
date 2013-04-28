@@ -1,16 +1,12 @@
 Bugs:
 - If you walk into a wall, you can't walk back off it - you have to turn around to walk out.
-- Walls can come between the camera and the player. Turn them transparent when that happens.
 
 Gameplay:
-- ability to collect loot
 - loot can be cash or items
 - enemies
   - spawn logic
   - pathfinding
   - combat
-- add a time limit or stopwatch
-- score indicator
 - some way to level up.
 - title / menu screen.
 - high score screen.
@@ -24,9 +20,7 @@ Polish:
 - Textures
   - more than one!
 - Sound effects:
-  - when you run into a wall
   - when you're moving
-  - when you pick up some loot
   - when you take a hit
   - when you launch an attack
   - when you die
@@ -35,7 +29,6 @@ Polish:
   - when you start a new level
   - when you finish a level
 - Music/ambient sounds
-- HUD
 
 Technical:
 - generate new levels dynamically as you progress through the game
@@ -46,7 +39,6 @@ Technical:
 - better loot placement
   - pick a fixed flow distance for each loot, but choose a random tile at that distance.
   - randomise placement within a tile.
-
 
 
 

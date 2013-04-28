@@ -79,6 +79,11 @@ var dungeon = function () { // start of the dungeon namespace
       'geo': new THREE.CylinderGeometry(0.25, 0.25, 0.1, 20, 1, false),
       'material': null, // gets initialised in makeDungeon.
     },
+
+    'soundData': {
+      'beat': "sfx/Beat.ogg",
+      'ting': "sfx/Ting.ogg",
+    },
   };
 
 
@@ -90,6 +95,11 @@ var dungeon = function () { // start of the dungeon namespace
   {
     game.world = new THREE.Scene();
     game.world.fog = new THREE.Fog(0x000000, 10, 60);
+
+    //for (var key in game.soundData)
+    //  ludum.addSound(key, [ game.soundData[key] ]);
+    ludum.addSound('beat', [ game.soundData['beat'] ]);
+    ludum.addSound('ting', [ game.soundData['ting'] ]);
   }
 
 
@@ -472,6 +482,7 @@ var dungeon = function () { // start of the dungeon namespace
         game.dungeon.remove(game.loot[i]);
         game.loot.splice(i, 1);
         game.playerData.score += 1;
+        ludum.playSound('ting');
       }
     }
 
@@ -508,8 +519,13 @@ var dungeon = function () { // start of the dungeon namespace
     if (turn.y != 0.0)
       game.player.rotateOnAxis(turn, turnAmount);
     
-    if (!willHitWall(game.player, move))
+    if (willHitWall(game.player, move)) {
+      if (speed > 0)
+        ludum.playSound('beat');
+    }
+    else {
       game.player.translateOnAxis(move, moveAmount);
+    }
 
     if (game.controls) {
       game.controls.update();
