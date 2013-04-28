@@ -24,6 +24,7 @@ var dungeon = function () { // start of the dungeon namespace
     'camera': null,     // The 3D object for the camera.
     'controls': null,   // The current camera controls, if any.
     'loot': [],         // The list of available loot items.
+    'occluders': [],    // A list of objects which are in between the camera and the player.
 
     'hud':  null,       // The HUD, displays player's score, life remaining, etc.
 
@@ -207,8 +208,12 @@ var dungeon = function () { // start of the dungeon namespace
 
   function _makeXWall(row, col)
   {
+    var material = new THREE.MeshLambertMaterial({
+      'color': 0xAAAAAA,
+      'map': THREE.ImageUtils.loadTexture('img/rock.png')
+    });
     // Create the wall
-    var wall = new THREE.Mesh(game.tileData.xWallGeo, game.tileData.material);
+    var wall = new THREE.Mesh(game.tileData.xWallGeo, material);
     wall.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT / 2.0, 0), 1);
     //wall.castShadow = true;
     wall.receiveShadow = true;
@@ -224,8 +229,12 @@ var dungeon = function () { // start of the dungeon namespace
 
   function _makeZWall(row, col)
   {
+    var material = new THREE.MeshLambertMaterial({
+      'color': 0xAAAAAA,
+      'map': THREE.ImageUtils.loadTexture('img/rock.png')
+    });
     // Create the wall
-    var wall = new THREE.Mesh(game.tileData.zWallGeo, game.tileData.material);
+    var wall = new THREE.Mesh(game.tileData.zWallGeo, material);
     wall.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT / 2.0, 0), 1);
     //wall.castShadow = true;
     wall.receiveShadow = true;
@@ -414,12 +423,42 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
+  function clearOccludingWalls()
+  {
+    for (var i = 0, end = game.occluders.length; i < end; i++)
+      game.occluders[i].material.wireframe = false;
+    game.occluders = [];
+  }
+
+
+  function hideOccludingWalls()
+  {
+    var src = new THREE.Vector3(0, 0, 0);
+    game.player.localToWorld(src);
+
+    var dest = new THREE.Vector3(0, 0, 0);
+    game.camera.localToWorld(dest);
+
+    var dir = new THREE.Vector3().subVectors(dest, src);
+
+    var raycaster = new THREE.Raycaster(src, dir, 0, dir.length());
+    var intersections = raycaster.intersectObject(game.dungeon, true);
+    for (var i = 0, end = intersections.length; i < end; i++) {
+      var occluder = intersections[i].object;
+      game.occluders.push(occluder);
+      occluder.material.wireframe = true;
+    }
+  }
+
+
   //
   // Functions for the 'playing' state.
   //
 
   function playingDraw()
   {
+    clearOccludingWalls();
+    hideOccludingWalls();
     gRenderer.render(game.world, game.camera);
     gRenderStats.update();
   }
