@@ -28,6 +28,7 @@ var dungeon = function () { // start of the dungeon namespace
     'player': null,   // The 3D object for the player.
     'camera': null,   // The 3D object for the camera.
     'controls': null, // The current camera controls, if any.
+    'loot': [],       // The list of available loot items.
 
     'debug': false,
 
@@ -70,6 +71,12 @@ var dungeon = function () { // start of the dungeon namespace
     'cameraCfg': {
       'offset': new THREE.Vector3(0, (WALL_HEIGHT - 1) * 0.8, 10), // Position of the camera relative to the player.
     },
+
+    'lootCfg': {
+      'frequency': 0.05,
+      'geo': new THREE.CylinderGeometry(0.25, 0.25, 0.1, 20, 1, false),
+      'material': null, // gets initialised in makeDungeon.
+    },
   };
 
 
@@ -89,13 +96,21 @@ var dungeon = function () { // start of the dungeon namespace
     game.dungeon = new THREE.Object3D();
     game.world.add(game.dungeon);
 
+    var light = new THREE.AmbientLight(0x101010);
+    game.dungeon.add(light);
+
     game.tileCfg.material = new THREE.MeshLambertMaterial({
-        color: 0xAAAAAA,
-        map: THREE.ImageUtils.loadTexture('img/rock.png')
+      'color': 0xAAAAAA,
+      'map': THREE.ImageUtils.loadTexture('img/rock.png')
     });
     game.tileCfg.material.map.wrapS = THREE.RepeatWrapping;
     game.tileCfg.material.map.wrapT = THREE.RepeatWrapping;
     game.tileCfg.material.map.repeat.set(2, 2);
+
+    game.lootCfg.material = new THREE.MeshLambertMaterial({
+        'color': 0xEEEE00,
+        'emissive': 0x1E1E00,
+    });
 
     // Make the floor tiles
     for (var r = 0, endR = MAP_ROWS; r < endR; r++) {
@@ -131,8 +146,30 @@ var dungeon = function () { // start of the dungeon namespace
         _makeXWall(MAP_ROWS, c);
     }
 
-    var light = new THREE.AmbientLight(0x101010);
-    game.dungeon.add(light);
+    // Count the number of valid tiles.
+    var numTiles = 0;
+    for (var r = 0, endR = MAP_ROWS; r < endR; r++) {
+      for (var c = 0, endC = MAP_COLS; c < endC; c++) {
+        if (game.dungeonCfg.tiles[r][c] != 0)
+          ++numTiles;
+      }
+    }
+
+    // Distribute the loot evenly among the valid tiles.
+    var numTreasures = Math.ceil(MAP_ROWS * MAP_COLS * game.lootCfg.frequency);
+    var tileNum = 0;
+    var n = Math.floor(numTiles / numTreasures);
+    for (var r = 0, endR = MAP_ROWS; r < endR; r++) {
+      for (var c = 0, endC = MAP_COLS; c < endC; c++) {
+        if (game.dungeonCfg.tiles[r][c] == 0)
+          continue;
+        if (tileNum % n == 0 && numTreasures > 0) {
+          _makeLoot(r, c);
+          --numTreasures;
+        }
+        ++tileNum;
+      }
+    }
   }
 
 
@@ -197,22 +234,19 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
-  function _makeDirectionalLight(position, target)
+  function _makeLoot(row, col)
   {
-    var light = new THREE.DirectionalLight(0xFFFFFF);
-    light.position.copy(position);
-    light.lookAt(target);
-    light.castShadow = true;
-    light.shadowCameraLeft = -20;
-    light.shadowCameraTop = -20;
-    light.shadowCameraRight = 20;
-    light.shadowCameraBottom = 20;
-    light.shadowCameraNear = 10;
-    light.shadowCameraFar = 150;
-    light.shadowBias = -0.01;
-    light.shadowMapWidth = light.shadowMapHeight = 2048;
-    light.shadowDarkness = 0.7;
-    return light;
+    var loot = new THREE.Mesh(game.lootCfg.geo, game.lootCfg.material);
+    loot.translateOnAxis(new THREE.Vector3(0, 0, 1.25), 1);
+    loot.castShadow = true;
+    loot.receiveShadow = true;
+
+    // Move the loot to its final resting place.
+    var x = (col + 0.5) * TILE_SIZE;
+    var z = (row + 0.5) * TILE_SIZE;
+    loot.translateOnAxis(new THREE.Vector3(x, 0, z), 1);
+
+    game.dungeon.add(loot);
   }
 
 
