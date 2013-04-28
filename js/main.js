@@ -24,6 +24,7 @@ var dungeon = function () { // start of the dungeon namespace
     'camera': null,     // The 3D object for the camera.
     'controls': null,   // The current camera controls, if any.
     'loot': [],         // The list of available loot items.
+    'mobs': [],         // The list of all active mobs.
     'occluders': [],    // A list of objects which are in between the camera and the player.
 
     'hud':  null,       // The HUD, displays player's score, life remaining, etc.
@@ -80,6 +81,14 @@ var dungeon = function () { // start of the dungeon namespace
       'material': null, // gets initialised in makeDungeon.
     },
 
+    'mobData': {
+      'geo': new THREE.CylinderGeometry(0.80, 0.7, 2.0, 8, 2, false),
+      'material': null,
+      'maxActive': 5,
+      'spawnDelay': 5.0,   // seconds
+      'lastSpawnT': 0.0,
+    },
+
     'soundData': {
       'beat': "sfx/Beat.ogg",
       'ting': "sfx/Ting.ogg",
@@ -110,7 +119,7 @@ var dungeon = function () { // start of the dungeon namespace
 
     game.tileData.material = new THREE.MeshLambertMaterial({
       'color': 0xAAAAAA,
-      'map': THREE.ImageUtils.loadTexture('img/rock.png')
+      'map': THREE.ImageUtils.loadTexture('img/rock.png'),
     });
     game.tileData.material.map.wrapS = THREE.RepeatWrapping;
     game.tileData.material.map.wrapT = THREE.RepeatWrapping;
@@ -222,6 +231,10 @@ var dungeon = function () { // start of the dungeon namespace
       'color': 0xAAAAAA,
       'map': THREE.ImageUtils.loadTexture('img/rock.png')
     });
+    material.map.wrapS = THREE.RepeatWrapping;
+    material.map.wrapT = THREE.RepeatWrapping;
+    material.map.repeat.set(2, 2);
+
     // Create the wall
     var wall = new THREE.Mesh(game.tileData.xWallGeo, material);
     wall.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT / 2.0, 0), 1);
@@ -243,6 +256,10 @@ var dungeon = function () { // start of the dungeon namespace
       'color': 0xAAAAAA,
       'map': THREE.ImageUtils.loadTexture('img/rock.png')
     });
+    material.map.wrapS = THREE.RepeatWrapping;
+    material.map.wrapT = THREE.RepeatWrapping;
+    material.map.repeat.set(2, 2);
+
     // Create the wall
     var wall = new THREE.Mesh(game.tileData.zWallGeo, material);
     wall.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT / 2.0, 0), 1);
@@ -271,7 +288,7 @@ var dungeon = function () { // start of the dungeon namespace
     loot.translateOnAxis(new THREE.Vector3(x, 0, z), 1);
 
     game.loot.push(loot);
-    game.dungeon.add(loot);
+    game.world.add(loot);
   }
 
 
@@ -359,14 +376,79 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
+  function spawnMobs()
+  {
+    if (!game.mobData.material)
+      game.mobData.material = new THREE.MeshLambertMaterial({ 'color': 0x004000 });
+
+    var canSpawn = (ludum.globals.stateT - game.mobData.lastSpawnT) >= game.mobData.spawnDelay;
+    if (game.mobs.length < game.mobData.maxActive) {
+      var tile = randomTile();
+      var mob = _makeMob();
+      
+      var x = (tile.col + 0.5) * TILE_SIZE;
+      var z = (tile.row + 0.5) * TILE_SIZE;
+      mob.translateOnAxis(new THREE.Vector3(x, 0, z), 1);
+
+      game.mobs.push(mob);
+      game.world.add(mob);
+      game.mobData.lastSpawnT = game.stateT;
+    }
+  }
+
+
+  function _makeMob()
+  {
+    var mob = new THREE.Mesh(game.mobData.geo, game.mobData.material);
+    mob.castShadow = true;
+    mob.receiveShadow = true;
+    mob.translateOnAxis(new THREE.Vector3(0, 1, 0), 1);
+    return mob;
+  }
+
+
   //
-  // Functions
+  // Map Functions
   //
 
   function tileCenter(row, col) {
     var x = (col + 0.5) * TILE_SIZE;
     var z = (row + 0.5) * TILE_SIZE;
     return new THREE.Vector3(x, 0, z);
+  }
+
+
+  function countActiveTiles() {
+    var num = 0;
+    for (var r = 0, endR = game.dungeonData.rows; r < endR; r++) {
+      for (var c = 0, endC = game.dungeonData.cols; c < endC; c++) {
+        if (game.dungeonData.tiles[r][c] != 0)
+          num++;
+      }
+    }
+    return num;
+  }
+
+
+  function nthActiveTile(n) {
+    var num = 0;
+    for (var r = 0, endR = game.dungeonData.rows; r < endR; r++) {
+      for (var c = 0, endC = game.dungeonData.cols; c < endC; c++) {
+        if (game.dungeonData.tiles[r][c] != 0) {
+          if (num == n)
+            return { 'row': r, 'col': c };
+          num++;
+        }
+      }
+    }
+    return undefined;
+  }
+
+
+  function randomTile() {
+    var max = countActiveTiles();
+    var i = Math.floor(Math.random() * max) % max;
+    return nthActiveTile(i);
   }
 
 
@@ -433,14 +515,6 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
-  function clearOccludingWalls()
-  {
-    for (var i = 0, end = game.occluders.length; i < end; i++)
-      game.occluders[i].material.wireframe = false;
-    game.occluders = [];
-  }
-
-
   function hideOccludingWalls()
   {
     var src = new THREE.Vector3(0, 0, 0);
@@ -455,7 +529,6 @@ var dungeon = function () { // start of the dungeon namespace
     var intersections = raycaster.intersectObject(game.dungeon, true);
     for (var i = 0, end = intersections.length; i < end; i++) {
       var occluder = intersections[i].object;
-      game.occluders.push(occluder);
       occluder.material.wireframe = true;
     }
   }
@@ -465,11 +538,20 @@ var dungeon = function () { // start of the dungeon namespace
   // Functions for the 'playing' state.
   //
 
+  function _setWireframeOff(obj3D)
+  {
+    if (obj3D.material)
+      obj3D.material.wireframe = false;
+  }
+
+
   function playingDraw()
   {
-    clearOccludingWalls();
+    //clearOccludingWalls();
+    game.world.traverse(_setWireframeOff);
     hideOccludingWalls();
     gRenderer.render(game.world, game.camera);
+
     gRenderStats.update();
   }
 
@@ -479,7 +561,7 @@ var dungeon = function () { // start of the dungeon namespace
     // Collect loot
     for (var i = game.loot.length - 1; i >= 0; i--) {
       if (overlapping(game.player, game.loot[i])) {
-        game.dungeon.remove(game.loot[i]);
+        game.world.remove(game.loot[i]);
         game.loot.splice(i, 1);
         game.playerData.score += 1;
         ludum.playSound('ting');
@@ -538,6 +620,8 @@ var dungeon = function () { // start of the dungeon namespace
     }
 
     refreshHUD();
+
+    spawnMobs();
   }
 
 

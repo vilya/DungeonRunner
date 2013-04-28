@@ -1,16 +1,19 @@
 Bugs:
 - If you walk into a wall, you can't walk back off it - you have to turn around to walk out.
+- If you get stuck on a wall, you can turn around, then walk backwards through it!
+
 
 Gameplay:
-- loot can be cash or items
 - enemies
   - spawn logic
   - pathfinding
   - combat
+- loot can be cash or items
 - some way to level up.
 - title / menu screen.
 - high score screen.
 - win/lose conditions
+
 
 Polish:
 - 3D models
