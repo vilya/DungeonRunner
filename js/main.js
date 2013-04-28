@@ -4,14 +4,9 @@ var dungeon = function () { // start of the dungeon namespace
   // Constants
   //
 
-  var MAP_ROWS = 10;        // no. of tiles
-  var MAP_COLS = 10;        // no. of tiles.
-
   var TILE_SIZE = 10;       // metres.
   var WALL_HEIGHT = 4;      // metres.
   var WALL_THICKNESS = 0.1; // metres.
-  var MAP_WIDTH = MAP_COLS * TILE_SIZE; // metres
-  var MAP_DEPTH = MAP_COLS * TILE_SIZE; // metres
 
 
   //
@@ -34,6 +29,8 @@ var dungeon = function () { // start of the dungeon namespace
 
     // Information about the dungeon.
     'dungeonCfg': {
+      'rows': 10,
+      'cols': 10,
       'tiles': [
           [ 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, ],
           [ 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, ],
@@ -93,11 +90,8 @@ var dungeon = function () { // start of the dungeon namespace
 
   function makeDungeon()
   {
-    game.dungeon = new THREE.Object3D();
-    game.world.add(game.dungeon);
-
-    var light = new THREE.AmbientLight(0x101010);
-    game.dungeon.add(light);
+    game.dungeonCfg.width = game.dungeonCfg.cols * TILE_SIZE; // metres
+    game.dungeonCfg.depth = game.dungeonCfg.cols * TILE_SIZE; // metres
 
     game.tileCfg.material = new THREE.MeshLambertMaterial({
       'color': 0xAAAAAA,
@@ -112,55 +106,61 @@ var dungeon = function () { // start of the dungeon namespace
         'emissive': 0x1E1E00,
     });
 
+    game.dungeon = new THREE.Object3D();
+    game.world.add(game.dungeon);
+
+    var light = new THREE.AmbientLight(0x101010);
+    game.dungeon.add(light);
+
     // Make the floor tiles
-    for (var r = 0, endR = MAP_ROWS; r < endR; r++) {
-      for (var c = 0, endC = MAP_COLS; c < endC; c++) {
+    for (var r = 0, endR = game.dungeonCfg.rows; r < endR; r++) {
+      for (var c = 0, endC = game.dungeonCfg.cols; c < endC; c++) {
         if (game.dungeonCfg.tiles[r][c] != 0)
           _makeTile(r, c);
       }
     }
 
     // Make the +z walls
-    for (var r = 0, endR = MAP_ROWS; r < endR; r++) {
+    for (var r = 0, endR = game.dungeonCfg.rows; r < endR; r++) {
       var wasInTile = false;
-      for (var c = 0, endC = MAP_COLS; c < endC; c++) {
+      for (var c = 0, endC = game.dungeonCfg.cols; c < endC; c++) {
         var inTile = (game.dungeonCfg.tiles[r][c] != 0);
         if (inTile != wasInTile)
           _makeZWall(r, c);
         wasInTile = inTile;
       }
       if (wasInTile)
-        _makeZWall(r, MAP_COLS);
+        _makeZWall(r, game.dungeonCfg.cols);
     }
 
     // Make the +x walls
-    for (var c = 0, endC = MAP_COLS; c < endC; c++) {
+    for (var c = 0, endC = game.dungeonCfg.cols; c < endC; c++) {
       var wasInTile = false;
-      for (var r = 0, endR = MAP_ROWS; r < endR; r++) {
+      for (var r = 0, endR = game.dungeonCfg.rows; r < endR; r++) {
         var inTile = (game.dungeonCfg.tiles[r][c] != 0);
         if (inTile != wasInTile)
           _makeXWall(r, c);
         wasInTile = inTile;
       }
       if (wasInTile)
-        _makeXWall(MAP_ROWS, c);
+        _makeXWall(game.dungeonCfg.rows, c);
     }
 
     // Count the number of valid tiles.
     var numTiles = 0;
-    for (var r = 0, endR = MAP_ROWS; r < endR; r++) {
-      for (var c = 0, endC = MAP_COLS; c < endC; c++) {
+    for (var r = 0, endR = game.dungeonCfg.rows; r < endR; r++) {
+      for (var c = 0, endC = game.dungeonCfg.cols; c < endC; c++) {
         if (game.dungeonCfg.tiles[r][c] != 0)
           ++numTiles;
       }
     }
 
     // Distribute the loot evenly among the valid tiles.
-    var numTreasures = Math.ceil(MAP_ROWS * MAP_COLS * game.lootCfg.frequency);
+    var numTreasures = Math.ceil(game.dungeonCfg.rows * game.dungeonCfg.cols * game.lootCfg.frequency);
     var tileNum = 0;
     var n = Math.floor(numTiles / numTreasures);
-    for (var r = 0, endR = MAP_ROWS; r < endR; r++) {
-      for (var c = 0, endC = MAP_COLS; c < endC; c++) {
+    for (var r = 0, endR = game.dungeonCfg.rows; r < endR; r++) {
+      for (var c = 0, endC = game.dungeonCfg.cols; c < endC; c++) {
         if (game.dungeonCfg.tiles[r][c] == 0)
           continue;
         if (tileNum % n == 0 && numTreasures > 0) {
@@ -255,8 +255,8 @@ var dungeon = function () { // start of the dungeon namespace
     var geo = new THREE.CubeGeometry(0.8, 2.0, 0.8);
     var material = new THREE.MeshLambertMaterial({ color: 0x880000 });
 
-    var startRow = game.dungeonCfg.startTile / MAP_COLS;
-    var startCol = game.dungeonCfg.startTile % MAP_COLS;
+    var startRow = game.dungeonCfg.startTile / game.dungeonCfg.cols;
+    var startCol = game.dungeonCfg.startTile % game.dungeonCfg.cols;
     var startPos = tileCenter(startRow, startCol);
     startPos.y += 1;
 
@@ -302,7 +302,7 @@ var dungeon = function () { // start of the dungeon namespace
   function makeDebugGrid()
   {
     var grid = new THREE.Mesh(
-        new THREE.PlaneGeometry(MAP_WIDTH, MAP_DEPTH, MAP_COLS, MAP_ROWS),
+        new THREE.PlaneGeometry(game.dungeonCfg.width, game.dungeonCfg.depth, game.dungeonCfg.cols, game.dungeonCfg.rows),
         new THREE.MeshBasicMaterial({
           'color': 0x8888CC,
           'wireframe': true,
@@ -310,7 +310,7 @@ var dungeon = function () { // start of the dungeon namespace
         })
     );
     grid.applyMatrix(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-    grid.translateOnAxis(new THREE.Vector3(MAP_WIDTH / 2.0, MAP_DEPTH / 2.0, 0.0), 1);
+    grid.translateOnAxis(new THREE.Vector3(game.dungeonCfg.width / 2.0, game.dungeonCfg.depth / 2.0, 0.0), 1);
     //grid.lookAt(new THREE.Vector3(0, 1, 0));
     game.world.add(grid);
 
@@ -358,7 +358,7 @@ var dungeon = function () { // start of the dungeon namespace
     var toRow = Math.floor(endPos.z / TILE_SIZE);
 
     // If you're moving off the map, you'll hit a wall.
-    if (toCol < 0 || toCol >= MAP_COLS || toRow < 0 || toRow >= MAP_ROWS)
+    if (toCol < 0 || toCol >= game.dungeonCfg.cols || toRow < 0 || toRow >= game.dungeonCfg.rows)
       return true;
 
     // Otherwise, if you're trying to move to an empty tile you'll hit a wall.
