@@ -486,13 +486,24 @@ var dungeon = function () { // start of the dungeon namespace
       game.world.fog = null; // Switch off fog when we're using the trackball controls.
     }
 
+    window.addEventListener('resize', resize, false);
+
     // Launch into LudumEngine's main loop
     ludum.start('playing');
   }
 
 
+  function resize()
+  {
+    game.camera.aspect = window.innerWidth / window.innerHeight;
+    game.camera.updateProjectionMatrix();
+    gRenderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+
   return {
-    'run': run
+    'run': run,
+    'resize': resize
   };
 
 }(); // end of the dungeon namespace
