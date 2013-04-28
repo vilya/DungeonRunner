@@ -1,8 +1,3 @@
-Bugs:
-- If you walk into a wall, you can't walk back off it - you have to turn around to walk out.
-- If you get stuck on a wall, you can turn around, then walk backwards through it!
-
-
 Gameplay:
 - enemies
   - spawn logic
