@@ -42,16 +42,17 @@ var dungeon = function () { // start of the dungeon namespace
   // The game configuration settings. These will be used for setting up the
   // game and generally won't change during the game.
   var config = {
-    'debug': false,     // Whether to run in debug mode.
+    'debug': false,       // Whether to run in debug mode.
+    'invincible': false,  // Whether you're currently invincible (intended for debugging, but hey, go nuts).
 
     'cameraOffset': new THREE.Vector3(0, (WALL_HEIGHT - 1) * 0.8, 10), // Position of the camera relative to the player.
 
-    'autorun':  false,  // Whether the player automatically runs.
-    'runSpeed': 20.0,   // The movement speed of the player, in metres/second.
-    'jogSpeed': 10.0,   // The movement speed of the player, in metres/second.
-    'walkSpeed': 5.0,   // The movement speed of the player, in metres/second.
-    'turnSpeed': 5.0,   // How quickly the player turns, in radians/second.
-    'maxHealth': 100,   // Maximum value for the players health.
+    'autorun':  false,    // Whether the player automatically runs.
+    'runSpeed': 20.0,     // The movement speed of the player, in metres/second.
+    'jogSpeed': 10.0,     // The movement speed of the player, in metres/second.
+    'walkSpeed': 5.0,     // The movement speed of the player, in metres/second.
+    'turnSpeed': 5.0,     // How quickly the player turns, in radians/second.
+    'maxHealth': 100,     // Maximum value for the players health.
 
     'lootsPerTile': 0.05, // i.e. 5% of the tiles will contain loot.
     'maxActiveMobs': 5,   // Number of mobs alive at any one time.
@@ -75,6 +76,8 @@ var dungeon = function () { // start of the dungeon namespace
     'lootEmissive': 0x1E1E00,
     'mob': 0x005500,
     'player': 0x880000,
+    'goal': 0x4466FF,
+    'goalEmissive': 0x000022,
     'debugGrid': 0x8888CC,
     'debugAxisLabel': 0xCC0000,
   };
@@ -88,6 +91,7 @@ var dungeon = function () { // start of the dungeon namespace
     'loot': null,
     'mob': null,
     'player': null,
+    'goal': null,
     'debugGrid': null,
   };
   var geometry = {
@@ -97,13 +101,14 @@ var dungeon = function () { // start of the dungeon namespace
     'loot': null,
     'mob': null,
     'player': null,
+    'goal': null,
     'debugGrid': null,
   };
-  var axes = { // so we don't have to keep reallocating them...
-    'x': new THREE.Vector3(1, 0, 0),
-    'y': new THREE.Vector3(0, 1, 0),
-    'z': new THREE.Vector3(0, 0, 1),
-  };
+
+  // Some common vectors, so we don't have to keep reallocating them...
+  var xAxis = new THREE.Vector3(1, 0, 0);
+  var yAxis = new THREE.Vector3(0, 1, 0);
+  var zAxis = new THREE.Vector3(0, 0, 1);
 
   // Description for each of the levels.
   var levels = [
@@ -213,7 +218,7 @@ var dungeon = function () { // start of the dungeon namespace
     }
 
     this.setLife = function (life) {
-      lifeText.textContent = life + "% health";
+      lifeText.textContent = Math.ceil(life) + "% health";
     }
 
     this.setStopwatch = function (timeInSecs) {
@@ -271,8 +276,9 @@ var dungeon = function () { // start of the dungeon namespace
     geometry.xWall = new THREE.CubeGeometry(TILE_SIZE, WALL_HEIGHT, WALL_THICKNESS);
     geometry.zWall = new THREE.CubeGeometry(WALL_THICKNESS, WALL_HEIGHT, TILE_SIZE);
     geometry.loot = new THREE.CylinderGeometry(0.25, 0.25, 0.1, 20, 1, false);
-    geometry.mob = new THREE.CylinderGeometry(0.80, 0.7, 2.0, 8, 2, false);
-    geometry.player = new THREE.CubeGeometry(0.8, 2.0, 0.8, 2, 3, 2);
+    geometry.mob = new THREE.CylinderGeometry(0.80, 0.7, 2.1, 8, 2, false);
+    geometry.player = new THREE.CubeGeometry(0.8, 1.8, 0.8, 2, 3, 2);
+    geometry.goal = new THREE.SphereGeometry(0.4, 20.0, 20.0);
     geometry.debugGrid = new THREE.PlaneGeometry(levels[0].width, levels[0].depth, levels[0].cols, levels[0].rows);
     geometry.debugOriginLabel = new THREE.TextGeometry("origin", { 'size': 1.0, 'height': 0.2 });
     geometry.debugXAxisLabel = new THREE.TextGeometry("+x", { 'size': 1.0, 'height': 0.2 });
@@ -298,6 +304,7 @@ var dungeon = function () { // start of the dungeon namespace
     materials.loot = new THREE.MeshLambertMaterial({ 'color': colors.loot, 'emissive': colors.lootEmissive });
     materials.mob = new THREE.MeshLambertMaterial({ 'color': colors.mob });
     materials.player = new THREE.MeshLambertMaterial({ 'color': colors.player });
+    materials.goal = new THREE.MeshLambertMaterial({ 'color': colors.goal, 'emissive': colors.goalEmissive });
 
     materials.debugGrid = new THREE.MeshBasicMaterial({ 'color': colors.debugGrid, 'wireframe': true, 'wireframeLinewidth': 3 });
     materials.debugAxisLabel = new THREE.MeshBasicMaterial({ 'color': colors.debugAxisLabel });
@@ -333,6 +340,10 @@ var dungeon = function () { // start of the dungeon namespace
     game.torch = _setupTorch();
     game.torch.name = "torch";
     game.camera.add(game.torch);
+
+    game.goal = _setupGoal(game.level);
+    game.goal.name = "goal";
+    game.world.add(game.goal);
 
     game.debugCamera = _setupDebugCamera();
     game.debugCamera.name = "debugCamera";
@@ -441,13 +452,13 @@ var dungeon = function () { // start of the dungeon namespace
   function _setupPlayer(level)
   {
     var startPos = tileCenter(level.startTile.row, level.startTile.col);
-    startPos.y += 1;
+    startPos.y += geometry.player.height / 2.0;
 
     var player = new THREE.Mesh(geometry.player, materials.player);
     player.castShadow = true;
     player.receiveShadow = true;
     player.translateOnAxis(startPos, 1.0);
-    player.rotateOnAxis(new THREE.Vector3(0, 1, 0), Math.PI);
+    player.rotateOnAxis(yAxis, Math.PI);
 
     return player;
   }
@@ -491,9 +502,34 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
+  function _setupGoal(level)
+  {
+    var goalPos = tileCenter(level.endTile.row, level.endTile.col);
+    goalPos.y += 1.2;
+
+    var goal = new THREE.Mesh(geometry.goal, materials.goal);
+    goal.receiveShadow = true;
+    goal.translateOnAxis(goalPos, 1.0);
+    
+    return goal;
+  }
+
+
   function _setupDebugCamera()
   {
-    return _setupCamera();
+    var width = renderer.domElement.width;
+    var height = renderer.domElement.height;
+
+    var fieldOfView = 35; // in degrees.
+    var aspectRatio = (width - 0.0) / height;
+    var nearClip = 1.0;
+    var farClip = 1000.0;
+
+    var camera = new THREE.PerspectiveCamera(fieldOfView, aspectRatio, nearClip, farClip);
+    camera.position.set(70, 70, 70);
+    camera.lookAt(game.dungeon.position);
+
+    return camera;
   }
 
 
@@ -510,11 +546,11 @@ var dungeon = function () { // start of the dungeon namespace
     debugGrid.add(originLabel);
 
     var xLabel = new THREE.Mesh(geometry.debugXAxisLabel, materials.debugAxisLabel);
-    xLabel.translateOnAxis(new THREE.Vector3(1, 0, 0), 100);
+    xLabel.translateOnAxis(xAxis, 100);
     debugGrid.add(xLabel);
 
     var zLabel = new THREE.Mesh(geometry.debugZAxisLabel, materials.debugAxisLabel);
-    zLabel.translateOnAxis(new THREE.Vector3(0, 0, 1), 100);
+    zLabel.translateOnAxis(zAxis, 100);
     debugGrid.add(zLabel);
 
     return debugGrid;
@@ -525,7 +561,7 @@ var dungeon = function () { // start of the dungeon namespace
   {
     // Create the floor
     var floor = new THREE.Mesh(geometry.floor, materials.floor);
-    floor.translateOnAxis(new THREE.Vector3(0, -0.5, 0), 1);
+    floor.translateOnAxis(yAxis, -geometry.floor.height / 2.0);
     floor.receiveShadow = true;
 
     // Move the floor into it's final resting place.
@@ -541,7 +577,7 @@ var dungeon = function () { // start of the dungeon namespace
   {
     // Create the roof
     var roof = new THREE.Mesh(geometry.floor, materials.floor);
-    roof.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT + 0.5, 0), 1);
+    roof.translateOnAxis(yAxis, WALL_HEIGHT + 0.5);
     roof.receiveShadow = true;
 
     // Move the tile into it's final resting place.
@@ -557,7 +593,7 @@ var dungeon = function () { // start of the dungeon namespace
   {
     // Create the wall
     var wall = new THREE.Mesh(geometry.xWall, materials.wall.clone());
-    wall.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT / 2.0, 0), 1);
+    wall.translateOnAxis(yAxis, WALL_HEIGHT / 2.0);
     //wall.castShadow = true;
     wall.receiveShadow = true;
 
@@ -574,7 +610,7 @@ var dungeon = function () { // start of the dungeon namespace
   {
     // Create the wall
     var wall = new THREE.Mesh(geometry.zWall, materials.wall.clone());
-    wall.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT / 2.0, 0), 1);
+    wall.translateOnAxis(yAxis, WALL_HEIGHT / 2.0);
     //wall.castShadow = true;
     wall.receiveShadow = true;
 
@@ -590,13 +626,17 @@ var dungeon = function () { // start of the dungeon namespace
   function _makeLoot(row, col)
   {
     var loot = new THREE.Mesh(geometry.loot, materials.loot);
-    loot.translateOnAxis(new THREE.Vector3(0, 0, 1.25), 1);
+    loot.translateOnAxis(yAxis, geometry.loot.height / 2.0);
     loot.castShadow = true;
     loot.receiveShadow = true;
 
     // Move the loot to its final resting place.
-    var x = (col + 0.5) * TILE_SIZE;
-    var z = (row + 0.5) * TILE_SIZE;
+    var range = TILE_SIZE - 2.0 * geometry.loot.radiusBottom;
+    var dx = (Math.random() - 0.5) * range;
+    var dy = (Math.random() - 0.5) * range;
+
+    var x = (col + 0.5) * TILE_SIZE + dx;
+    var z = (row + 0.5) * TILE_SIZE + dy;
     loot.translateOnAxis(new THREE.Vector3(x, 0, z), 1);
 
     return loot;
@@ -608,7 +648,7 @@ var dungeon = function () { // start of the dungeon namespace
     var mob = new THREE.Mesh(geometry.mob, materials.mob);
     mob.castShadow = true;
     mob.receiveShadow = true;
-    mob.translateOnAxis(new THREE.Vector3(0, 1, 0), 1);
+    mob.translateOnAxis(yAxis, geometry.mob.height / 2.0);
     return mob;
   }
 
@@ -776,6 +816,9 @@ var dungeon = function () { // start of the dungeon namespace
 
   function spawnMobs()
   {
+    if (!geometry.mob)
+      return;
+
     var now = ludum.globals.stateT;
     var canSpawn = (now - game.lastSpawnT) >= config.mobSpawnDelay;
     if (game.mobs.children.length < config.maxActiveMobs) {
@@ -831,6 +874,9 @@ var dungeon = function () { // start of the dungeon namespace
 
   function takeDamage(dt)
   {
+    if (config.invincible)
+      return;
+
     var dest = new THREE.Vector3(0, 0, 0);
     game.player.localToWorld(dest);
 
@@ -850,6 +896,8 @@ var dungeon = function () { // start of the dungeon namespace
     var dest = new THREE.Vector3(0, 0, 0);
     game.player.localToWorld(dest);
 
+    var playerRadius = objRadius(game.player) * 0.8;
+
     for (var i = 0, end = game.mobs.children.length; i < end; i++) {
       var mob = game.mobs.children[i];
 
@@ -865,7 +913,7 @@ var dungeon = function () { // start of the dungeon namespace
       game.player.localToWorld(dest);
 
       var dir = new THREE.Vector3().subVectors(dest, src);
-      var distance = dir.length();
+      var distance = dir.length() - playerRadius;
       dir.normalize();
 
       var speed = Math.min(config.mobMoveSpeed * dt / 1000, distance);
@@ -913,10 +961,6 @@ var dungeon = function () { // start of the dungeon namespace
     if (turn.y != 0.0)
       game.player.rotateOnAxis(turn, turnAmount);
     
-    //if (willHitMob(game.player, move)) {
-    //  ludum.playSound('beat');
-    //}
-    //else
     if (willHitWall(game.level, game.player, move)) {
       if (speed > 0)
         ludum.playSound('beat');
@@ -979,6 +1023,23 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
+  function toggleInvincibility()
+  {
+    config.invincible = !config.invincible;
+  }
+
+
+  //
+  // Functions for the dead state
+  //
+
+  function deadDraw()
+  {
+    playingDraw();
+    // TODO: show message saying "you are dead"
+  }
+
+
   //
   // Main functions
   //
@@ -1027,9 +1088,18 @@ var dungeon = function () { // start of the dungeon namespace
     // Set up the game states.
     ludum.addState('playing', { 'draw': playingDraw, 'update': playingUpdate });
     ludum.addState('debugging', { 'draw': debuggingDraw, 'update': debuggingUpdate, 'enter': debuggingEnter, 'leave': debuggingLeave });
+    ludum.addState('dead', { 'draw': deadDraw });
 
-    ludum.addChangeStateOnKeyPressEvent('playing', ludum.keycodes.ESCAPE, 'debugging');
-    ludum.addChangeStateOnKeyPressEvent('debugging', ludum.keycodes.ESCAPE, 'playing');
+    // Set up events for the 'playing' state.
+    ludum.addChangeStateOnKeyPressEvent('playing', "Q", 'debugging');
+    ludum.addGameConditionEvent('playing', function () { game.life <= 0.0; }, 'dead');
+
+    // Set up events for the 'debugging' state.
+    ludum.addChangeStateOnKeyPressEvent('debugging', "Q", 'playing');
+    ludum.addKeyPressEvent('debugging', "W", 0.5, { 'leave': toggleInvincibility });
+
+    // Set up events for the 'dead' state.
+    ludum.addChangeStateOnKeyPressEvent('dead', " ", 'playing');
 
     // Create the world, camera, player, everything!
     init();
