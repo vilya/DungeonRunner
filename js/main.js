@@ -159,7 +159,8 @@ var dungeon = function () { // start of the dungeon namespace
     'debugControls': null,  // The current camera controls, if any.
 
     // General game state
-    'level': null, // The current level.
+    'level': null,          // The current level.
+    'levelTime': 0.0,       // The amount of time spent in the current level so far.
 
     // Player state
     'score': 0,
@@ -167,6 +168,10 @@ var dungeon = function () { // start of the dungeon namespace
 
     // Mob state
     'lastSpawnT': 0.0,
+
+    // UI elements
+    'hud': null,
+    'resultsWin': null
   };
 
 
@@ -176,57 +181,19 @@ var dungeon = function () { // start of the dungeon namespace
 
   function HUD(x, y, w)
   {
-    this.domElement = document.createElement("div");
-    this.domElement.id = "hud";
-    this.domElement.style.width = w + "px";
-    this.domElement.style.position = 'absolute';
-    this.domElement.style.bottom = y + "px";
-    this.domElement.style.left = x + "px";
-    this.domElement.style.zIndex = 100;
-    this.domElement.style.background = "#222";
-    this.domElement.style.fontFamily = "Helvetica,Arial,sans-serif";
-    this.domElement.style.fontSize = "12px";
-    this.domElement.style.opacity = 0.8;
+    var labelWidth = w * 0.4;
 
-    var scoreElem = document.createElement("div");
-    scoreElem.id = "score";
-    scoreElem.style.cssText = "padding:0 0 3px 3px; text-align: left;";
-    this.domElement.appendChild(scoreElem);
-
-    var scoreText = document.createElement("div");
-    scoreText.id = 'scoreText';
-    scoreText.innerHTML = "Gold";
-    scoreText.style.color = "yellow";
-    scoreElem.appendChild(scoreText);
-
-    var lifeElem = document.createElement("div");
-    lifeElem.id = 'life';
-    lifeElem.style.cssText = "padding:0 0 3px 3px; text-align: left;";
-    this.domElement.appendChild(lifeElem);
-
-    var lifeText = document.createElement("div");
-    lifeText.id = 'lifeText';
-    lifeText.innerHTML = "Life";
-    lifeText.style.color = "red";
-    lifeElem.appendChild(lifeText);
-
-    var stopwatchElem = document.createElement("div");
-    stopwatchElem.id = 'stopwatch';
-    stopwatchElem.style.cssText = "padding:0 0 3px 3px; text-align: left;";
-    this.domElement.appendChild(stopwatchElem);
-
-    var stopwatchText = document.createElement("div");
-    stopwatchText.id = 'stopwatchText';
-    stopwatchText.innerHTML = "taken";
-    stopwatchText.style.color = "#BBB";
-    stopwatchElem.appendChild(stopwatchText);
+    this.domElement = createWindowDiv("hud", x, y, w);
+    addLabelledField(this.domElement, 'score', "Gold", "yellow", labelWidth);
+    addLabelledField(this.domElement, 'life', "Health", "red", labelWidth);
+    addLabelledField(this.domElement, 'stopwatch', "Time", "#BBB", labelWidth);
 
     this.setScore = function (score) {
-      scoreText.textContent = score + " gold";
+      setFieldValue(this.domElement, 'score', score);
     }
 
     this.setLife = function (life) {
-      lifeText.textContent = Math.ceil(life) + "% health";
+      setFieldValue(this.domElement, 'life', Math.ceil(life) + "%");
     }
 
     this.setStopwatch = function (timeInSecs) {
@@ -234,10 +201,133 @@ var dungeon = function () { // start of the dungeon namespace
       var secs = Math.floor(timeInSecs % 60);
       var secsStr = (secs < 10) ? "0" + secs : "" + secs;
       var str = mins + ":" + secsStr + " secs";
-      stopwatchText.textContent = str;
+      setFieldValue(this.domElement, 'stopwatch', str);
+    }
+
+    this.show = function () {
+      this.domElement.style.display = 'block';
+    }
+
+    this.hide = function () {
+      this.domElement.style.display = 'none';
     }
 
     return this;
+  }
+
+
+  //
+  // ResultsWindow class
+  //
+
+  function ResultsWindow(w)
+  {
+    var labelWidth = w * 0.5;
+
+    this.domElement = createWindowDiv("results", 0, 0, w);
+    addHeading(this.domElement, "Press space to continue...", "#BBB");
+    addLabelledField(this.domElement, 'score', "Gold", "yellow", labelWidth);
+    addLabelledField(this.domElement, 'life', "Health", "red", labelWidth);
+    addLabelledField(this.domElement, 'stopwatch', "Time", "#BBB", labelWidth);
+
+    this.setScore = function (score) {
+      setFieldValue(this.domElement, 'score', score);
+    }
+
+    this.setLife = function (life) {
+      setFieldValue(this.domElement, 'life', Math.ceil(life) + "%");
+    }
+
+    this.setStopwatch = function (timeInSecs) {
+      var mins = Math.floor(timeInSecs / 60);
+      var secs = Math.floor(timeInSecs % 60);
+      var secsStr = (secs < 10) ? "0" + secs : "" + secs;
+      var str = mins + ":" + secsStr + " secs";
+      setFieldValue(this.domElement, 'stopwatch', str);
+    }
+
+    this.show = function () {
+      this.domElement.style.display = 'block';
+    }
+
+    this.hide = function () {
+      this.domElement.style.display = 'none';
+    }
+
+    return this;
+  }
+
+
+  //
+  // HTML helper functions
+  //
+
+  function createWindowDiv(divID, x, y, w, h)
+  {
+    var div = document.createElement("div");
+    div.id = divID;
+    if (w !== undefined)
+      div.style.width = w + "px";
+    if (h !== undefined)
+      div.style.height = h + "px";
+    div.style.position = 'absolute';
+    if (y !== undefined)
+      div.style.bottom = y + "px";
+    if (x !== undefined)
+      div.style.left = x + "px";
+    div.style.zIndex = 100;
+    div.style.background = "#222";
+    div.style.fontFamily = "Helvetica,Arial,sans-serif";
+    div.style.fontSize = "12px";
+    div.style.opacity = 0.8;
+    div.style.display = 'none'; // initially hidden.
+    return div;
+  }
+
+
+  function addHeading(container, headingText, color)
+  {
+    var headingElem = document.createElement("div");
+    headingElem.style.cssText = "padding:0 0 3px 3px; text-align: center;";
+    headingElem.textContent = headingText;
+    if (color !== undefined)
+      headingElem.style.color = color;
+    container.appendChild(headingElem);
+  }
+
+
+  function addLabelledField(container, fieldID, labelText, color, labelWidth)
+  {
+    var fullFieldID = container.id + "_" + fieldID;
+
+    var fieldElem = document.createElement("div");
+    fieldElem.id = fullFieldID;
+    fieldElem.style.cssText = "padding:0 0 3px 3px; text-align: left;";
+    container.appendChild(fieldElem);
+
+    var fieldLabel = document.createElement("div");
+    fieldLabel.id = fullFieldID + '_label';
+    fieldLabel.textContent = labelText + ": ";
+    fieldLabel.style.display = 'inline-block';
+    if (labelWidth !== undefined)
+      fieldLabel.style.width = labelWidth + "px";
+    if (color !== undefined)
+      fieldLabel.style.color = color;
+    fieldElem.appendChild(fieldLabel);
+
+    var fieldValue = document.createElement("span");
+    fieldValue.id = fullFieldID + '_value';
+    if (color !== undefined)
+      fieldValue.style.color = color;
+    fieldElem.appendChild(fieldValue);
+  }
+
+
+  function setFieldValue(container, fieldID, newValue)
+  {
+    var fullFieldID = container.id + "_" + fieldID + "_value";
+    var field = document.getElementById(fullFieldID);
+    field.textContent = newValue;
   }
 
 
@@ -247,7 +337,7 @@ var dungeon = function () { // start of the dungeon namespace
 
   function create()
   {
-    createHUD();
+    createUI();
     createSounds();
     createTextures();
     createGeometry();
@@ -258,10 +348,13 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
-  function createHUD()
+  function createUI()
   {
-    game.hud = new HUD(0, 0, 100);
+    game.hud = new HUD(0, 0, 180);
     document.getElementById('viewport').appendChild(game.hud.domElement);
+
+    game.resultsWin = new ResultsWindow(180);
+    document.getElementById('viewport').appendChild(game.resultsWin.domElement);
   }
 
 
@@ -916,6 +1009,8 @@ var dungeon = function () { // start of the dungeon namespace
 
     update: function (dt)
     {
+      game.levelTime = ludum.globals.stateT;
+
       collectLoot();
       takeDamage(dt);
       moveMobs(dt);
@@ -928,7 +1023,14 @@ var dungeon = function () { // start of the dungeon namespace
 
     enter: function ()
     {
+      game.hud.show();
       startLevel(levels[0]);
+    },
+
+
+    leave: function ()
+    {
+      game.hud.hide();
     }
   };
 
@@ -1156,12 +1258,18 @@ var dungeon = function () { // start of the dungeon namespace
     enter: function ()
     {
       game.player.add(meshes.deadText);
+
+      game.resultsWin.setScore(game.score);
+      game.resultsWin.setLife(game.life);
+      game.resultsWin.setStopwatch(game.levelTime);
+      game.resultsWin.show();
     },
 
 
     leave: function()
     {
       game.player.remove(meshes.deadText);
+      game.resultsWin.hide();
     },
   };
 
