@@ -189,11 +189,11 @@ namespace vh {
       }
     }
 
-    if (startCount != 1)
+    if (startCount != 1) {
+      fprintf(stderr, "Error: %s contains %d start tiles and %d end tiles. Skipping.\n",
+         name.c_str(), startCount, endCount);
       return false;
-
-    if (endCount != 1)
-      return false;
+    }
 
     int startRow = startIdx / img.width;
     int startCol = startIdx % img.width;
@@ -203,7 +203,7 @@ namespace vh {
     std::string levelName = basename(name);
 
     fprintf(file, "  {\n");
-    fprintf(file, "    'name': '%s'\n", levelName.c_str());
+    fprintf(file, "    'name': '%s',\n", levelName.c_str());
     fprintf(file, "    'rows': %d,\n", img.height);
     fprintf(file, "    'cols': %d,\n", img.width);
     fprintf(file, "    'tiles': [\n");
@@ -246,7 +246,9 @@ namespace vh {
 
     fclose(imgfile);
 
-    vh::writeLevel(img, imgpath, jsonfile);
+    if (!vh::writeLevel(img, imgpath, jsonfile))
+      return false;
+
     fflush(jsonfile);
     return true;
   }
@@ -276,6 +278,7 @@ int main(int argc, char** argv)
 
   fprintf(jsonfile, "var levels = [\n");
   for (int i = 2; i < argc; i++) {
+    fprintf(stderr, "[%d] Processing %s\n", i - 1, argv[i]);
     if (!vh::process(jsonfile, argv[i]))
       ++skipped;
     else
