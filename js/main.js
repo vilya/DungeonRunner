@@ -57,6 +57,7 @@ var dungeon = function () { // start of the dungeon namespace
     'maxActiveMobs': 5,   // Number of mobs alive at any one time.
     'mobSpawnDelay': 5.0, // in seconds.
     'mobMoveSpeed': 12.0, // in metres/second.
+    'mobDamage': 10,      // in percentage points per second.
 
     // Name and url for each of our sound effects.
     'sounds': {
@@ -807,6 +808,7 @@ var dungeon = function () { // start of the dungeon namespace
   function playingUpdate(dt)
   {
     collectLoot();
+    takeDamage(dt);
     moveMobs(dt);
     movePlayer(dt);
     updateCamera(dt);
@@ -823,6 +825,22 @@ var dungeon = function () { // start of the dungeon namespace
         game.score += 1;
         ludum.playSound('ting');
       }
+    }
+  }
+
+
+  function takeDamage(dt)
+  {
+    var dest = new THREE.Vector3(0, 0, 0);
+    game.player.localToWorld(dest);
+
+    for (var i = 0, end = game.mobs.children.length; i < end; i++) {
+      var mob = game.mobs.children[i];
+      if (!overlapping(game.player, mob))
+        continue;
+
+      var damage = Math.min(config.mobDamage * dt / 1000.0, game.life);
+      game.life -= damage;
     }
   }
 
