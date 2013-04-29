@@ -15,7 +15,7 @@ deploy_dir:
 
 .PHONY: fix_perms
 fix_perms:
-	chmod a-x .gitignore Makefile index.html README.md js/* 
+	chmod a-x .gitignore Makefile index.html README.md js/* fonts/* img/* levels/* sfx/* doc/* 
 
 
 clean:
