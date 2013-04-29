@@ -10,16 +10,16 @@
 // - mouse
 // Can enable and disable input devices independently.
 
+// Done: Sound library
+// - Support for loops (i.e. background music) and one-off sounds (e.g. sfx).
+// - Function to add an audio tag to the page, given a parent.
+
 // Drawing library
 // - Support for webgl, canvas.
 // - Consistent api regardless of which back-end is being used.
 // - Option to fallback gracefully from WebGL to Canvas.
 // - Function to add a drawing area to the page, given a parent.
 // - Text rendering
-
-// Sound library
-// - Support for loops (i.e. background music) and one-off sounds (e.g. sfx).
-// - Function to add an audio tag to the page, given a parent.
 
 // Sprites
 // - Static or animated.
