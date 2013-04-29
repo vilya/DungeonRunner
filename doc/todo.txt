@@ -1,7 +1,6 @@
 Gameplay:
 - enemies
   - spawn logic
-  - pathfinding
   - combat
 - loot can be cash or items
 - some way to level up.

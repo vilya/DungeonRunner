@@ -1,11 +1,15 @@
 // The scene graph is structured like this:
 //
 //  world
+//    ambient light
 //    dungeon
-//      ambient light
-//      ...alternating floor then roof tiles...
-//      ...z walls...
-//      ...x walls...
+//      floors
+//        ...floor tiles...
+//      roofs
+//        ...roof tiles...
+//      walls
+//        ...z walls...
+//        ...x walls...
 //    mobs
 //      ...individual mobs...
 //    loots
@@ -52,6 +56,7 @@ var dungeon = function () { // start of the dungeon namespace
     'lootsPerTile': 0.05, // i.e. 5% of the tiles will contain loot.
     'maxActiveMobs': 5,   // Number of mobs alive at any one time.
     'mobSpawnDelay': 5.0, // in seconds.
+    'mobMoveSpeed': 12.0, // in metres/second.
 
     // Name and url for each of our sound effects.
     'sounds': {
@@ -62,11 +67,12 @@ var dungeon = function () { // start of the dungeon namespace
 
   // Resource collections.
   var colors = {
+    'ambientLight': 0x100800,
     'floor': 0xAAAAAA,
     'wall': 0xAAAAAA,
     'loot': 0xEEEE00,
     'lootEmissive': 0x1E1E00,
-    'mob': 0x007700,
+    'mob': 0x005500,
     'player': 0x880000,
     'debugGrid': 0x8888CC,
     'debugAxisLabel': 0xCC0000,
@@ -119,7 +125,7 @@ var dungeon = function () { // start of the dungeon namespace
       'startTile': { 'row': 0, 'col': 8 },
       'endTile': { 'row': 9, 'col': 4 },
       'width': 100.0,   // in metres, = cols * TILE_SIZE
-      'height': 100.0,  // in metres, = cols * TILE_SIZE
+      'depth': 100.0,  // in metres, = cols * TILE_SIZE
     },
   ];
 
@@ -166,7 +172,6 @@ var dungeon = function () { // start of the dungeon namespace
     this.domElement.style.background = "#222";
     this.domElement.style.fontFamily = "Helvetica,Arial,sans-serif";
     this.domElement.style.fontSize = "12px";
-    //this.domElement.style.fontWeight = "bold";
     this.domElement.style.opacity = 0.8;
 
     var scoreElem = document.createElement("div");
@@ -334,8 +339,6 @@ var dungeon = function () { // start of the dungeon namespace
 
     game.debugGrid = _setupDebugGrid();
     game.debugGrid.name = "debugGrid";
-    if (config.debug)
-      game.world.add(debugGrid);
   }
 
 
@@ -349,13 +352,36 @@ var dungeon = function () { // start of the dungeon namespace
   {
     var dungeon = new THREE.Object3D();
 
+    // Make the ambient light.
+    var ambientLight = new THREE.AmbientLight(colors.ambientLight);
+    ambientLight.name = "ambientLight"
+    dungeon.add(ambientLight);
+
     // Make the floor tiles
+    var floors = new THREE.Object3D();
+    floors.name = "floors";
+    dungeon.add(floors);
     for (var r = 0, endR = level.rows; r < endR; r++) {
       for (var c = 0, endC = level.cols; c < endC; c++) {
         if (level.tiles[r][c] != 0)
-          dungeon.add(_makeTile(r, c));
+          floors.add(_makeFloor(r, c));
       }
     }
+
+    // Make the roof tiles
+    var roofs = new THREE.Object3D();
+    roofs.name = "roofs";
+    dungeon.add(roofs);
+    for (var r = 0, endR = level.rows; r < endR; r++) {
+      for (var c = 0, endC = level.cols; c < endC; c++) {
+        if (level.tiles[r][c] != 0)
+          roofs.add(_makeRoof(r, c));
+      }
+    }
+
+    var walls = new THREE.Object3D();
+    walls.name = "walls";
+    dungeon.add(walls);
 
     // Make the +z walls
     for (var r = 0, endR = level.rows; r < endR; r++) {
@@ -363,11 +389,11 @@ var dungeon = function () { // start of the dungeon namespace
       for (var c = 0, endC = level.cols; c < endC; c++) {
         var inTile = (level.tiles[r][c] != 0);
         if (inTile != wasInTile)
-          dungeon.add(_makeZWall(r, c));
+          walls.add(_makeZWall(r, c));
         wasInTile = inTile;
       }
       if (wasInTile)
-        _makeZWall(r, level.cols);
+        walls.add(_makeZWall(r, level.cols));
     }
 
     // Make the +x walls
@@ -376,11 +402,11 @@ var dungeon = function () { // start of the dungeon namespace
       for (var r = 0, endR = level.rows; r < endR; r++) {
         var inTile = (level.tiles[r][c] != 0);
         if (inTile != wasInTile)
-          dungeon.add(_makeXWall(r, c));
+          walls.add(_makeXWall(r, c));
         wasInTile = inTile;
       }
       if (wasInTile)
-        _makeXWall(level.rows, c);
+        walls.add(_makeXWall(level.rows, c));
     }
 
     return dungeon;
@@ -494,30 +520,35 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
-  function _makeTile(row, col)
+  function _makeFloor(row, col)
   {
-    var tile = new THREE.Object3D();
-
     // Create the floor
     var floor = new THREE.Mesh(geometry.floor, materials.floor);
     floor.translateOnAxis(new THREE.Vector3(0, -0.5, 0), 1);
     floor.receiveShadow = true;
-    tile.add(floor);
 
+    // Move the floor into it's final resting place.
+    var x = (col + 0.5) * TILE_SIZE;
+    var z = (row + 0.5) * TILE_SIZE;
+    floor.translateOnAxis(new THREE.Vector3(x, 0, z), 1);
+
+    return floor;
+  }
+
+
+  function _makeRoof(row, col)
+  {
     // Create the roof
-    if (!game.debug) {
-      var roof = new THREE.Mesh(geometry.floor, materials.floor);
-      roof.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT + 0.5, 0), 1);
-      roof.receiveShadow = true;
-      tile.add(roof);
-    }
+    var roof = new THREE.Mesh(geometry.floor, materials.floor);
+    roof.translateOnAxis(new THREE.Vector3(0, WALL_HEIGHT + 0.5, 0), 1);
+    roof.receiveShadow = true;
 
     // Move the tile into it's final resting place.
     var x = (col + 0.5) * TILE_SIZE;
     var z = (row + 0.5) * TILE_SIZE;
-    tile.translateOnAxis(new THREE.Vector3(x, 0, z), 1);
+    roof.translateOnAxis(new THREE.Vector3(x, 0, z), 1);
 
-    return tile;
+    return roof;
   }
 
 
@@ -695,8 +726,26 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
+  function findOccluders(srcObj, targetObj)
+  {
+    var src = new THREE.Vector3(0, 0, 0);
+    srcObj.localToWorld(src);
+
+    var dest = new THREE.Vector3(0, 0, 0);
+    targetObj.localToWorld(dest);
+
+    var dir = new THREE.Vector3().subVectors(dest, src);
+
+    var raycaster = new THREE.Raycaster(src, dir, 0, dir.length());
+    var intersections = raycaster.intersectObject(game.dungeon.getObjectByName("walls"), true);
+    return intersections;
+  }
+
+
   function hideOccluders()
   {
+    var intersections = findOccluders(game.camera, game.player);
+    /*
     var src = new THREE.Vector3(0, 0, 0);
     game.player.localToWorld(src);
 
@@ -706,7 +755,8 @@ var dungeon = function () { // start of the dungeon namespace
     var dir = new THREE.Vector3().subVectors(dest, src);
 
     var raycaster = new THREE.Raycaster(src, dir, 0, dir.length());
-    var intersections = raycaster.intersectObject(game.dungeon, true);
+    var intersections = raycaster.intersectObject(game.dungeon.getObjectByName("walls"), true);
+    */
     for (var i = 0, end = intersections.length; i < end; i++) {
       var occluder = intersections[i].object;
       occluder.visible = false;
@@ -748,18 +798,8 @@ var dungeon = function () { // start of the dungeon namespace
   {
     unhideOccluders();  // Unhide the old set of occluding walls.
     hideOccluders();    // Find the new set of occluding walls.
-    if (config.debug) {
-      // Switch off fog when we're using debug controls.
-      var savedFog = game.world.fog;
-      game.world.fog = null; 
 
-      renderer.render(game.world, game.debugCamera);
-
-      game.world.fog = savedFog;
-    }
-    else {
-      renderer.render(game.world, game.camera);
-    }
+    renderer.render(game.world, game.camera);
     renderstats.update();
   }
 
@@ -767,6 +807,7 @@ var dungeon = function () { // start of the dungeon namespace
   function playingUpdate(dt)
   {
     collectLoot();
+    moveMobs(dt);
     movePlayer(dt);
     updateCamera(dt);
     refreshHUD();
@@ -782,6 +823,39 @@ var dungeon = function () { // start of the dungeon namespace
         game.score += 1;
         ludum.playSound('ting');
       }
+    }
+  }
+
+
+  function moveMobs(dt)
+  {
+    var dest = new THREE.Vector3(0, 0, 0);
+    game.player.localToWorld(dest);
+
+    for (var i = 0, end = game.mobs.children.length; i < end; i++) {
+      var mob = game.mobs.children[i];
+
+      // Can the mob see the player?
+      var occluders = findOccluders(mob, game.player);
+      if (occluders.length != 0)
+        continue;
+
+      var src = new THREE.Vector3(0, 0, 0);
+      mob.localToWorld(src);
+
+      var dest = new THREE.Vector3(0, 0, 0);
+      game.player.localToWorld(dest);
+
+      var dir = new THREE.Vector3().subVectors(dest, src);
+      var distance = dir.length();
+      dir.normalize();
+
+      var speed = Math.min(config.mobMoveSpeed * dt / 1000, distance);
+      dir.multiplyScalar(speed);
+
+      dir.add(src);
+      mob.worldToLocal(dir);
+      mob.translateOnAxis(dir, 1.0);
     }
   }
 
@@ -842,9 +916,6 @@ var dungeon = function () { // start of the dungeon namespace
     game.camera.rotation.copy(game.player.rotation);
     game.camera.translateOnAxis(config.cameraOffset, 1.0);
     game.camera.lookAt(game.player.position);
-
-    if (config.debug)
-      game.debugControls.update();
   }
 
 
@@ -855,6 +926,44 @@ var dungeon = function () { // start of the dungeon namespace
     game.hud.setStopwatch(ludum.globals.stateT);
   }
 
+
+  //
+  // Functions for the debugging state
+  //
+
+  function debuggingDraw()
+  {
+    renderer.render(game.world, game.debugCamera);
+    renderstats.update();
+  }
+
+
+  function debuggingUpdate(dt)
+  {
+    playingUpdate(dt);
+    game.debugControls.update();
+  }
+
+
+  function debuggingEnter()
+  {
+    game.world.add(game.debugGrid);
+    game.world.fog.far = 1000.0;
+    game.dungeon.getObjectByName('roofs').traverse(function (obj) { obj.visible = false; });
+  }
+
+
+  function debuggingLeave()
+  {
+    game.world.remove(game.debugGrid);
+    game.world.fog.far = 60.0;
+    game.dungeon.getObjectByName('roofs').traverse(function (obj) { obj.visible = true; });
+  }
+
+
+  //
+  // Main functions
+  //
 
   // Call this to start the game.
   function run()
@@ -899,6 +1008,10 @@ var dungeon = function () { // start of the dungeon namespace
 
     // Set up the game states.
     ludum.addState('playing', { 'draw': playingDraw, 'update': playingUpdate });
+    ludum.addState('debugging', { 'draw': debuggingDraw, 'update': debuggingUpdate, 'enter': debuggingEnter, 'leave': debuggingLeave });
+
+    ludum.addChangeStateOnKeyPressEvent('playing', ludum.keycodes.ESCAPE, 'debugging');
+    ludum.addChangeStateOnKeyPressEvent('debugging', ludum.keycodes.ESCAPE, 'playing');
 
     // Create the world, camera, player, everything!
     init();
@@ -920,7 +1033,8 @@ var dungeon = function () { // start of the dungeon namespace
     game.camera.aspect = width / height;
     game.camera.updateProjectionMatrix();
 
-    //refreshHUD();
+    game.debugCamera.aspect = width / height;
+    game.debugCamera.updateProjectionMatrix();
 
     renderer.setSize(width, height);
   }
