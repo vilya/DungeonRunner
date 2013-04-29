@@ -80,6 +80,7 @@ var dungeon = function () { // start of the dungeon namespace
     'goalEmissive': 0x000022,
     'debugGrid': 0x8888CC,
     'debugAxisLabel': 0xCC0000,
+    'deadText': 0x990000,
   };
   var textures = {
     'floor': null,
@@ -93,6 +94,7 @@ var dungeon = function () { // start of the dungeon namespace
     'player': null,
     'goal': null,
     'debugGrid': null,
+    'deadText': null,
   };
   var geometry = {
     'floor': null,
@@ -103,6 +105,7 @@ var dungeon = function () { // start of the dungeon namespace
     'player': null,
     'goal': null,
     'debugGrid': null,
+    'deadText': null,
   };
 
   // Some common vectors, so we don't have to keep reallocating them...
@@ -146,6 +149,8 @@ var dungeon = function () { // start of the dungeon namespace
     'camera': null,         // The 3D object for the camera.
     'torch': null,          // The torch held by the player, represented as a spotlight.
     'debugCamera': null,    // The camera we use in debug mode.
+    'debugGrid': null,      // The grid we show in debug mode.
+    'deadText': null,       // The text we show when your health falls to zero.
     'occluders': [],        // The list of objects which we've hidden because they're in between the player and the camera.
     
     'debugControls': null,  // The current camera controls, if any.
@@ -283,6 +288,7 @@ var dungeon = function () { // start of the dungeon namespace
     geometry.debugOriginLabel = new THREE.TextGeometry("origin", { 'size': 1.0, 'height': 0.2 });
     geometry.debugXAxisLabel = new THREE.TextGeometry("+x", { 'size': 1.0, 'height': 0.2 });
     geometry.debugZAxisLabel = new THREE.TextGeometry("+z", { 'size': 1.0, 'height': 0.2 });
+    geometry.deadText = new THREE.TextGeometry("Dead", { 'size': 1.0, 'height': 0.2 });
 
     for (var key in geometry)
       geometry[key].computeBoundingBox();
@@ -308,6 +314,8 @@ var dungeon = function () { // start of the dungeon namespace
 
     materials.debugGrid = new THREE.MeshBasicMaterial({ 'color': colors.debugGrid, 'wireframe': true, 'wireframeLinewidth': 3 });
     materials.debugAxisLabel = new THREE.MeshBasicMaterial({ 'color': colors.debugAxisLabel });
+
+    materials.deadText = new THREE.MeshLambertMaterial({ 'color': colors.deadText });
   }
 
 
@@ -351,6 +359,9 @@ var dungeon = function () { // start of the dungeon namespace
 
     game.debugGrid = _setupDebugGrid();
     game.debugGrid.name = "debugGrid";
+
+    game.deadText = _setupDeadText();
+    game.deadText.name = "deadText";
   }
 
 
@@ -554,6 +565,15 @@ var dungeon = function () { // start of the dungeon namespace
     debugGrid.add(zLabel);
 
     return debugGrid;
+  }
+
+
+  function _setupDeadText()
+  {
+    var deadText = new THREE.Mesh(geometry.deadText, materials.deadText);
+    deadText.translateOnAxis(yAxis, geometry.player.height * 0.6);
+    deadText.translateOnAxis(zAxis, objRadius(game.player));
+    return deadText;
   }
 
 
@@ -838,26 +858,28 @@ var dungeon = function () { // start of the dungeon namespace
   // Functions for the 'playing' state.
   //
 
-  function playingDraw()
-  {
-    unhideOccluders();  // Unhide the old set of occluding walls.
-    hideOccluders();    // Find the new set of occluding walls.
+  var playingStateFuncs = {
+    draw: function ()
+    {
+      unhideOccluders();  // Unhide the old set of occluding walls.
+      hideOccluders();    // Find the new set of occluding walls.
 
-    renderer.render(game.world, game.camera);
-    renderstats.update();
-  }
+      renderer.render(game.world, game.camera);
+      renderstats.update();
+    },
 
 
-  function playingUpdate(dt)
-  {
-    collectLoot();
-    takeDamage(dt);
-    moveMobs(dt);
-    movePlayer(dt);
-    updateCamera(dt);
-    refreshHUD();
-    spawnMobs();
-  }
+    update: function (dt)
+    {
+      collectLoot();
+      takeDamage(dt);
+      moveMobs(dt);
+      movePlayer(dt);
+      updateCamera(dt);
+      refreshHUD();
+      spawnMobs();
+    },
+  };
 
 
   function collectLoot()
@@ -993,34 +1015,37 @@ var dungeon = function () { // start of the dungeon namespace
   // Functions for the debugging state
   //
 
-  function debuggingDraw()
-  {
-    renderer.render(game.world, game.debugCamera);
-    renderstats.update();
-  }
+  var debuggingStateFuncs = {
+    draw: function ()
+    {
+      unhideOccluders();
+      renderer.render(game.world, game.debugCamera);
+      renderstats.update();
+    },
 
 
-  function debuggingUpdate(dt)
-  {
-    playingUpdate(dt);
-    game.debugControls.update();
-  }
+    update: function (dt)
+    {
+      playingStateFuncs.update(dt);
+      game.debugControls.update();
+    },
 
 
-  function debuggingEnter()
-  {
-    game.world.add(game.debugGrid);
-    game.world.fog.far = 1000.0;
-    game.dungeon.getObjectByName('roofs').traverse(function (obj) { obj.visible = false; });
-  }
+    enter: function()
+    {
+      game.world.add(game.debugGrid);
+      game.world.fog.far = 1000.0;
+      game.dungeon.getObjectByName('roofs').traverse(function (obj) { obj.visible = false; });
+    },
 
 
-  function debuggingLeave()
-  {
-    game.world.remove(game.debugGrid);
-    game.world.fog.far = 60.0;
-    game.dungeon.getObjectByName('roofs').traverse(function (obj) { obj.visible = true; });
-  }
+    leave: function()
+    {
+      game.world.remove(game.debugGrid);
+      game.world.fog.far = 60.0;
+      game.dungeon.getObjectByName('roofs').traverse(function (obj) { obj.visible = true; });
+    },
+  };
 
 
   function toggleInvincibility()
@@ -1033,11 +1058,24 @@ var dungeon = function () { // start of the dungeon namespace
   // Functions for the dead state
   //
 
-  function deadDraw()
-  {
-    playingDraw();
-    // TODO: show message saying "you are dead"
-  }
+  var deadStateFuncs = {
+    draw: function ()
+    {
+      playingStateFuncs.draw();
+    },
+
+
+    enter: function ()
+    {
+      game.player.add(game.deadText);
+    },
+
+
+    leave: function()
+    {
+      game.player.remove(game.deadText);
+    },
+  };
 
 
   //
@@ -1086,13 +1124,13 @@ var dungeon = function () { // start of the dungeon namespace
     ludum.useKeyboard(); // Installs ludum.js' keyboard event handlers.
 
     // Set up the game states.
-    ludum.addState('playing', { 'draw': playingDraw, 'update': playingUpdate });
-    ludum.addState('debugging', { 'draw': debuggingDraw, 'update': debuggingUpdate, 'enter': debuggingEnter, 'leave': debuggingLeave });
-    ludum.addState('dead', { 'draw': deadDraw });
+    ludum.addState('playing', playingStateFuncs);
+    ludum.addState('debugging', debuggingStateFuncs);
+    ludum.addState('dead', deadStateFuncs);
 
     // Set up events for the 'playing' state.
     ludum.addChangeStateOnKeyPressEvent('playing', "Q", 'debugging');
-    ludum.addGameConditionEvent('playing', function () { game.life <= 0.0; }, 'dead');
+    ludum.addGameConditionEvent('playing', function () { return game.life <= 0.0; }, 'dead');
 
     // Set up events for the 'debugging' state.
     ludum.addChangeStateOnKeyPressEvent('debugging', "Q", 'playing');
