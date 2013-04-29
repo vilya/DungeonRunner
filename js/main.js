@@ -17,6 +17,7 @@
 //    player
 //    camera
 //      torch (spotlight)
+//    goal
 //    debugCamera
 //    debugGrid (only when in debug mode)
 
@@ -81,6 +82,7 @@ var dungeon = function () { // start of the dungeon namespace
     'debugGrid': 0x8888CC,
     'debugAxisLabel': 0xCC0000,
     'deadText': 0x990000,
+    'levelCompleteText': 0x994400,
   };
   var textures = {
     'floor': null,
@@ -95,6 +97,7 @@ var dungeon = function () { // start of the dungeon namespace
     'goal': null,
     'debugGrid': null,
     'deadText': null,
+    'levelCompleteText': null,
   };
   var geometry = {
     'floor': null,
@@ -106,9 +109,11 @@ var dungeon = function () { // start of the dungeon namespace
     'goal': null,
     'debugGrid': null,
     'deadText': null,
+    'levelCompleteText': null,
   };
   var meshes = {
     'deadText': null,
+    'levelCompleteText': null,
   };
 
   // Some common vectors, so we don't have to keep reallocating them. Treat these as read only!
@@ -151,9 +156,9 @@ var dungeon = function () { // start of the dungeon namespace
     'loots': null,          // The root 3D object for all lootable items.
     'player': null,         // The 3D object for the player.
     'camera': null,         // The 3D object for the camera.
+    'goal': null,           // The 3D object for the goal.
     'debugCamera': null,    // The camera we use in debug mode.
     'debugGrid': null,      // The grid we show in debug mode.
-    'deadText': null,       // The text we show when your health falls to zero.
     'occluders': [],        // The list of objects which we've hidden because they're in between the player and the camera.
     
     'debugControls': null,  // The current camera controls, if any.
@@ -385,7 +390,8 @@ var dungeon = function () { // start of the dungeon namespace
     geometry.debugOriginLabel = new THREE.TextGeometry("origin", { 'size': 1.0, 'height': 0.2 });
     geometry.debugXAxisLabel = new THREE.TextGeometry("+x", { 'size': 1.0, 'height': 0.2 });
     geometry.debugZAxisLabel = new THREE.TextGeometry("+z", { 'size': 1.0, 'height': 0.2 });
-    geometry.deadText = new THREE.TextGeometry("Dead", { 'size': 1.0, 'height': 0.2 });
+    geometry.deadText = new THREE.TextGeometry("Dead", { 'size': 0.6, 'height': 0.2 });
+    geometry.levelCompleteText = new THREE.TextGeometry("Complete!", { 'size': 0.6, 'height': 0.2 });
 
     for (var key in geometry)
       geometry[key].computeBoundingBox();
@@ -413,6 +419,7 @@ var dungeon = function () { // start of the dungeon namespace
     materials.debugAxisLabel = new THREE.MeshBasicMaterial({ 'color': colors.debugAxisLabel });
 
     materials.deadText = new THREE.MeshLambertMaterial({ 'color': colors.deadText });
+    materials.levelCompleteText = new THREE.MeshLambertMaterial({ 'color': colors.levelCompleteText });
   }
 
 
@@ -420,6 +427,9 @@ var dungeon = function () { // start of the dungeon namespace
   {
     meshes.deadText = _createDeadText();
     meshes.deadText.name = "deadText";
+
+    meshes.levelCompleteText = _createLevelCompleteText();
+    meshes.levelCompleteText.name = "levelCompleteText";
   }
 
 
@@ -651,6 +661,15 @@ var dungeon = function () { // start of the dungeon namespace
     deadText.translateOnAxis(yAxis, geometry.player.height * 0.6);
     deadText.translateOnAxis(zAxis, geometry.player.depth * 0.5);
     return deadText;
+  }
+
+
+  function _createLevelCompleteText()
+  {
+    var levelCompleteText = new THREE.Mesh(geometry.levelCompleteText, materials.levelCompleteText);
+    levelCompleteText.translateOnAxis(yAxis, geometry.player.height * 0.6);
+    levelCompleteText.translateOnAxis(zAxis, geometry.player.depth * 0.5);
+    return levelCompleteText;
   }
 
 
@@ -1045,9 +1064,9 @@ var dungeon = function () { // start of the dungeon namespace
       game.loots = level.world.getObjectByName("loots");
       game.player = level.world.getObjectByName("player");
       game.camera = level.world.getObjectByName("camera");
+      game.goal = level.world.getObjectByName("goal");
       game.debugCamera = level.world.getObjectByName("debugCamera");
       game.debugGrid = level.world.getObjectByName("debugGrid");
-      game.deadText = level.world.getObjectByName("deadText");
       game.debugControls = level.debugControls;
     }
 
@@ -1275,6 +1294,36 @@ var dungeon = function () { // start of the dungeon namespace
 
 
   //
+  // Functions for the level complete state.
+  //
+
+  var levelCompleteStateFuncs = {
+    draw: function ()
+    {
+      playingStateFuncs.draw();
+    },
+
+
+    enter: function ()
+    {
+      game.player.add(meshes.levelCompleteText);
+
+      game.resultsWin.setScore(game.score);
+      game.resultsWin.setLife(game.life);
+      game.resultsWin.setStopwatch(game.levelTime);
+      game.resultsWin.show();
+    },
+
+
+    leave: function()
+    {
+      game.player.remove(meshes.levelCompleteText);
+      game.resultsWin.hide();
+    },
+  };
+
+
+  //
   // Main functions
   //
 
@@ -1323,10 +1372,12 @@ var dungeon = function () { // start of the dungeon namespace
     ludum.addState('playing', playingStateFuncs);
     ludum.addState('debugging', debuggingStateFuncs);
     ludum.addState('dead', deadStateFuncs);
+    ludum.addState('levelComplete', levelCompleteStateFuncs);
 
     // Set up events for the 'playing' state.
     ludum.addChangeStateOnKeyPressEvent('playing', "Q", 'debugging');
     ludum.addGameConditionEvent('playing', function () { return game.life <= 0.0; }, 'dead');
+    ludum.addGameConditionEvent('playing', function () { return overlapping(game.player, game.goal); }, 'levelComplete');
 
     // Set up events for the 'debugging' state.
     ludum.addChangeStateOnKeyPressEvent('debugging', "Q", 'playing');
@@ -1334,6 +1385,9 @@ var dungeon = function () { // start of the dungeon namespace
 
     // Set up events for the 'dead' state.
     ludum.addChangeStateOnKeyPressEvent('dead', " ", 'playing');
+
+    // Set up events for the 'level complete' state.
+    ludum.addChangeStateOnKeyPressEvent('levelComplete', " ", 'playing');
 
     // Create the world, camera, player, everything!
     create();
