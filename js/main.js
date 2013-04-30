@@ -29,7 +29,7 @@ var dungeon = function () { // start of the dungeon namespace
 
   var TILE_SIZE = 10;       // metres.
   var WALL_HEIGHT = 4;      // metres.
-  var WALL_THICKNESS = 0.1; // metres.
+  var WALL_THICKNESS = 0.05; // metres.
 
 
   //
@@ -123,6 +123,7 @@ var dungeon = function () { // start of the dungeon namespace
   var zAxis = new THREE.Vector3(0, 0, 1);
 
   // Description for each of the levels.
+  /*
   var levels = [
     {
       'name': "Level 1",
@@ -146,6 +147,7 @@ var dungeon = function () { // start of the dungeon namespace
       'depth': 100.0,  // in metres, = cols * TILE_SIZE
     },
   ];
+  */
 
   // Run-time state for the game.
   var game = {
@@ -166,6 +168,7 @@ var dungeon = function () { // start of the dungeon namespace
     // General game state
     'level': null,          // The current level.
     'levelTime': 0.0,       // The amount of time spent in the current level so far.
+    'nextLevel': 0,         // Index of the next level to start. Incremented when you beat a level, reset to zero when you die.
 
     // Player state
     'score': 0,
@@ -1012,6 +1015,40 @@ var dungeon = function () { // start of the dungeon namespace
 
 
   //
+  // Functions for the 'starting' state.
+  //
+
+  var startingStateFuncs = {
+    draw: function ()
+    {
+      unhideOccluders();  // Unhide the old set of occluding walls.
+      hideOccluders();    // Find the new set of occluding walls.
+
+      renderer.render(game.world, game.camera);
+      renderstats.update();
+    },
+
+    update: function (dt)
+    {
+      var intensity = ludum.globals.stateT / 2.0;
+      intensity = Math.min(intensity * intensity, 1.0);
+
+      var ambientLight = game.dungeon.getObjectByName("ambientLight");
+      ambientLight.intensity = intensity;
+
+      var torch = game.camera.getObjectByName("torch");
+      torch.intensity = intensity;
+    },
+
+
+    enter: function ()
+    {
+      startLevel(levels[game.nextLevel]);
+    },
+  };
+
+
+  //
   // Functions for the 'playing' state.
   //
 
@@ -1043,7 +1080,6 @@ var dungeon = function () { // start of the dungeon namespace
     enter: function ()
     {
       game.hud.show();
-      startLevel(levels[0]);
     },
 
 
@@ -1289,12 +1325,15 @@ var dungeon = function () { // start of the dungeon namespace
     {
       game.player.remove(meshes.deadText);
       game.resultsWin.hide();
+
+      // Reset to the first level.
+      game.nextLevel = 0;
     },
   };
 
 
   //
-  // Functions for the level complete state.
+  // Functions for the level complete states.
   //
 
   var levelCompleteStateFuncs = {
@@ -1319,6 +1358,9 @@ var dungeon = function () { // start of the dungeon namespace
     {
       game.player.remove(meshes.levelCompleteText);
       game.resultsWin.hide();
+
+      // Move on to the next level.
+      game.nextLevel++;
     },
   };
 
@@ -1369,10 +1411,14 @@ var dungeon = function () { // start of the dungeon namespace
     ludum.useKeyboard(); // Installs ludum.js' keyboard event handlers.
 
     // Set up the game states.
+    ludum.addState('starting', startingStateFuncs);
     ludum.addState('playing', playingStateFuncs);
     ludum.addState('debugging', debuggingStateFuncs);
     ludum.addState('dead', deadStateFuncs);
     ludum.addState('levelComplete', levelCompleteStateFuncs);
+
+    // Set up events for the 'starting' state.
+    ludum.addChangeStateAtTimeEvent('starting', 3.0, 'playing');
 
     // Set up events for the 'playing' state.
     ludum.addChangeStateOnKeyPressEvent('playing', "Q", 'debugging');
@@ -1384,10 +1430,10 @@ var dungeon = function () { // start of the dungeon namespace
     ludum.addKeyPressEvent('debugging', "W", 0.5, { 'leave': toggleInvincibility });
 
     // Set up events for the 'dead' state.
-    ludum.addChangeStateOnKeyPressEvent('dead', " ", 'playing');
+    ludum.addChangeStateOnKeyPressEvent('dead', " ", 'starting');
 
     // Set up events for the 'level complete' state.
-    ludum.addChangeStateOnKeyPressEvent('levelComplete', " ", 'playing');
+    ludum.addChangeStateOnKeyPressEvent('levelComplete', " ", 'starting');
 
     // Create the world, camera, player, everything!
     create();
@@ -1395,7 +1441,7 @@ var dungeon = function () { // start of the dungeon namespace
     window.addEventListener('resize', resize, false);
 
     // Launch into LudumEngine's main loop
-    ludum.start('playing');
+    ludum.start('starting');
   }
 
 

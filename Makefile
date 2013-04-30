@@ -2,6 +2,15 @@ DROPBOX_DIR = /cygdrive/C/Users/vilya/Dropbox
 DEPLOY_DIR = $(DROPBOX_DIR)/Public/DungeonRunner
 SRC_DIR = .
 
+LEVEL_SRCS = \
+  levels/level1.tga \
+  levels/level2.tga \
+  levels/titles.tga
+
+
+.PHONY: levels
+levels: levels/levels.js
+
 
 .PHONY: deploy
 deploy: deploy_dir fix_perms
@@ -16,6 +25,14 @@ deploy_dir:
 .PHONY: fix_perms
 fix_perms:
 	chmod a-x .gitignore Makefile index.html README.md js/* fonts/* img/* levels/* sfx/* doc/* 
+
+
+levels/levels.js: tools/levelgen/levelgen $(LEVEL_SRCS)
+	tools/levelgen/levelgen $@ $(LEVEL_SRCS)
+
+
+tools/levelgen/levelgen:
+	$(MAKE) -C tools/levelgen
 
 
 clean:

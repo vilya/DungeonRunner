@@ -313,6 +313,7 @@ var ludum = function () {  // start of the ludum namespace
 
     // Set the initial state for the game.
     changeState(initialStateName);
+    _changeState();
 
     _mainLoop();
   }
@@ -702,6 +703,7 @@ var ludum = function () {  // start of the ludum namespace
     'addEvent': addEvent,
     'addAlwaysOnEvent': addAlwaysOnEvent,
     'addTimeEvent': addTimeEvent,
+    'addChangeStateAtTimeEvent': addChangeStateAtTimeEvent,
     'addKeyPressEvent': addKeyPressEvent,
     'addChangeStateOnKeyPressEvent': addChangeStateOnKeyPressEvent,
     'addGameConditionEvent': addGameConditionEvent,

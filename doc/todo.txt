@@ -1,7 +1,7 @@
 Bugs:
 - Enemies all follow exactly the same path, so can end up clustered on top of
   each other. Use flocking rules to keep them separated.
-
+- Sometimes non-occluding walls get hidden
 
 Gameplay:
 - enemies
@@ -11,7 +11,6 @@ Gameplay:
 - some way to level up.
 - title / menu screen.
 - high score screen.
-- win/lose conditions
 
 
 Polish:
