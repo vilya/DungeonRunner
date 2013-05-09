@@ -2,24 +2,39 @@ Bugs:
 - Enemies all follow exactly the same path, so can end up clustered on top of
   each other. Use flocking rules to keep them separated.
 - Sometimes non-occluding walls get hidden
+- Performance is terrible on the 3rd level (too much raycasting to find
+  occluding walls?)
+- When you complete the final level, the game hangs
 
 Gameplay:
+- levels are too large, it's too hard to find the exit
+  - make the tile size smaller
+  - lay out the coins so that following them leads you to the exit (but you
+    might miss some other treasures on the way)?
 - enemies
   - spawn logic
-  - combat
-- loot can be cash or items
+  - combat?
+- loot can be cash or items (including health packs!)
 - some way to level up.
 - title / menu screen.
 - high score screen.
-
+- controls need work
+  - turning is too twitchy.
+  - have turning speed accelerate up to a maximum.
+  - likewise with running speed - accelerate (quickly) up to a maximum speed.
+- Have a time limit for each level, instead of a stopwatch?
+- Keep loot acquired from previous levels.
+- Minimap???
 
 Polish:
 - 3D models
   - player
   - loot
   - enemies
+- Animation
 - Textures
   - more than one!
+  - bump maps
 - Sound effects:
   - when you're moving
   - when you take a hit
@@ -30,15 +45,25 @@ Polish:
   - when you start a new level
   - when you finish a level
 - Music/ambient sounds
+  - Wind whistling
+  - Water dripping
+- Icons
+  - Get rid of placeholder icons
+  - Icon for "life"
+  - Icon for "gold"
+  - Icon for "time taken"
 
 Technical:
 - generate new levels dynamically as you progress through the game
   - unload old levels after you leave them
 - have enemies spawn using same logic as L4D
-  - use an estimate of emotional intensity of player to decide when/what to spawn.
+  - use an estimate of emotional intensity of player to decide when/what to
+    spawn.
   - use flow distance to decide where to spawn.
 - better loot placement
-  - pick a fixed flow distance for each loot, but choose a random tile at that distance.
+  - pick a fixed flow distance for each loot, but choose a random tile at that
+    distance.
+  - or, lay them in a trail between the starting point and the exit.
   - randomise placement within a tile.
 
 
@@ -53,4 +78,10 @@ Minimal necessary components of an RPG:
 - loot
 - combat
 - personalisation
+
+
+Possible sequels:
+- Dungeon Fighter (where you fight the enemies rather than running away from them)
+- Dungeon Sneaker (where you attempt to use stealth and avoid the enemies)
+- Dungeon Caster (where you're a wizard)
 
