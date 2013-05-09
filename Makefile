@@ -24,7 +24,7 @@ deploy_dir:
 
 .PHONY: fix_perms
 fix_perms:
-	chmod a-x .gitignore Makefile index.html README.md js/* fonts/* img/* levels/* sfx/* doc/* 
+	chmod a-x .gitignore Makefile index.html README.md js/* fonts/* img/* levels/* sfx/* doc/* screenshots/*
 
 
 levels/levels.js: tools/levelgen/levelgen $(LEVEL_SRCS)
