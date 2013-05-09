@@ -27,7 +27,7 @@ var dungeon = function () { // start of the dungeon namespace
   // Constants
   //
 
-  var TILE_SIZE = 10;       // metres.
+  var TILE_SIZE = 6;       // metres.
   var WALL_HEIGHT = 4;      // metres.
   var WALL_THICKNESS = 0.05; // metres.
 
@@ -38,7 +38,6 @@ var dungeon = function () { // start of the dungeon namespace
 
   var renderer;
   var renderstats;
-  var hud;
 
   // The game configuration settings. These will be used for setting up the
   // game and generally won't change during the game.
@@ -69,6 +68,18 @@ var dungeon = function () { // start of the dungeon namespace
   };
 
   // Resource collections.
+  var canvases = {
+    'hudTimer': null,
+    'hudLife': null,
+    'hudGold': null,
+    'hudMain': null,
+  };
+  var contexts = {
+    'hudTimer': null,
+    'hudLife': null,
+    'hudGold': null,
+    'hudMain': null,
+  };
   var colors = {
     'ambientLight': 0x100800,
     'floor': 0xAAAAAA,
@@ -81,12 +92,19 @@ var dungeon = function () { // start of the dungeon namespace
     'goalEmissive': 0x000022,
     'debugGrid': 0x8888CC,
     'debugAxisLabel': 0xCC0000,
-    'deadText': 0x990000,
-    'levelCompleteText': 0x994400,
+  };
+  var icons = {
+    'hudTimer': null,
+    'hudLife': null,
+    'hudGold': null,
   };
   var textures = {
     'floor': null,
     'wall': null,
+    'hudTimer': null,
+    'hudLife': null,
+    'hudGold': null,
+    'hudMain': null,
   };
   var materials = {
     'floor': null,
@@ -96,8 +114,10 @@ var dungeon = function () { // start of the dungeon namespace
     'player': null,
     'goal': null,
     'debugGrid': null,
-    'deadText': null,
-    'levelCompleteText': null,
+    'hudTimer': null,
+    'hudLife': null,
+    'hudGold': null,
+    'hudMain': null,
   };
   var geometry = {
     'floor': null,
@@ -108,12 +128,16 @@ var dungeon = function () { // start of the dungeon namespace
     'player': null,
     'goal': null,
     'debugGrid': null,
-    'deadText': null,
-    'levelCompleteText': null,
+    'hudTimer': null,
+    'hudLife': null,
+    'hudGold': null,
+    'hudMain': null,
   };
   var meshes = {
-    'deadText': null,
-    'levelCompleteText': null,
+    'hudTimer': null,
+    'hudLife': null,
+    'hudGold': null,
+    'hudMain': null,
   };
 
   // Some common vectors, so we don't have to keep reallocating them. Treat these as read only!
@@ -153,6 +177,7 @@ var dungeon = function () { // start of the dungeon namespace
   var game = {
     // three.js objects
     'world': null,          // The top-level Scene object for the world.
+    'hud': null,            // The top-level Scene object for the HUD.
     'dungeon': null,        // The root 3D object for the dungeon.
     'mobs': null,           // The root 3D object for all mobs.
     'loots': null,          // The root 3D object for all lootable items.
@@ -162,6 +187,7 @@ var dungeon = function () { // start of the dungeon namespace
     'debugCamera': null,    // The camera we use in debug mode.
     'debugGrid': null,      // The grid we show in debug mode.
     'occluders': [],        // The list of objects which we've hidden because they're in between the player and the camera.
+    'hudcamera': null,      // The 3D object for the ortho camera we use to render the HUD.
     
     'debugControls': null,  // The current camera controls, if any.
 
@@ -184,185 +210,53 @@ var dungeon = function () { // start of the dungeon namespace
 
 
   //
-  // The HUD class.
-  //
-
-  function HUD(x, y, w)
-  {
-    var labelWidth = w * 0.4;
-
-    this.domElement = createWindowDiv("hud", x, y, w);
-    addLabelledField(this.domElement, 'score', "Gold", "yellow", labelWidth);
-    addLabelledField(this.domElement, 'life', "Health", "red", labelWidth);
-    addLabelledField(this.domElement, 'stopwatch', "Time", "#BBB", labelWidth);
-
-    this.setScore = function (score) {
-      setFieldValue(this.domElement, 'score', score);
-    }
-
-    this.setLife = function (life) {
-      setFieldValue(this.domElement, 'life', Math.ceil(life) + "%");
-    }
-
-    this.setStopwatch = function (timeInSecs) {
-      var mins = Math.floor(timeInSecs / 60);
-      var secs = Math.floor(timeInSecs % 60);
-      var secsStr = (secs < 10) ? "0" + secs : "" + secs;
-      var str = mins + ":" + secsStr + " secs";
-      setFieldValue(this.domElement, 'stopwatch', str);
-    }
-
-    this.show = function () {
-      this.domElement.style.display = 'block';
-    }
-
-    this.hide = function () {
-      this.domElement.style.display = 'none';
-    }
-
-    return this;
-  }
-
-
-  //
-  // ResultsWindow class
-  //
-
-  function ResultsWindow(w)
-  {
-    var labelWidth = w * 0.5;
-
-    this.domElement = createWindowDiv("results", 0, 0, w);
-    addHeading(this.domElement, "Press space to continue...", "#BBB");
-    addLabelledField(this.domElement, 'score', "Gold", "yellow", labelWidth);
-    addLabelledField(this.domElement, 'life', "Health", "red", labelWidth);
-    addLabelledField(this.domElement, 'stopwatch', "Time", "#BBB", labelWidth);
-
-    this.setScore = function (score) {
-      setFieldValue(this.domElement, 'score', score);
-    }
-
-    this.setLife = function (life) {
-      setFieldValue(this.domElement, 'life', Math.ceil(life) + "%");
-    }
-
-    this.setStopwatch = function (timeInSecs) {
-      var mins = Math.floor(timeInSecs / 60);
-      var secs = Math.floor(timeInSecs % 60);
-      var secsStr = (secs < 10) ? "0" + secs : "" + secs;
-      var str = mins + ":" + secsStr + " secs";
-      setFieldValue(this.domElement, 'stopwatch', str);
-    }
-
-    this.show = function () {
-      this.domElement.style.display = 'block';
-    }
-
-    this.hide = function () {
-      this.domElement.style.display = 'none';
-    }
-
-    return this;
-  }
-
-
-  //
-  // HTML helper functions
-  //
-
-  function createWindowDiv(divID, x, y, w, h)
-  {
-    var div = document.createElement("div");
-    div.id = divID;
-    if (w !== undefined)
-      div.style.width = w + "px";
-    if (h !== undefined)
-      div.style.height = h + "px";
-    div.style.position = 'absolute';
-    if (y !== undefined)
-      div.style.bottom = y + "px";
-    if (x !== undefined)
-      div.style.left = x + "px";
-    div.style.zIndex = 100;
-    div.style.background = "#222";
-    div.style.fontFamily = "Helvetica,Arial,sans-serif";
-    div.style.fontSize = "12px";
-    div.style.opacity = 0.8;
-    div.style.display = 'none'; // initially hidden.
-    return div;
-  }
-
-
-  function addHeading(container, headingText, color)
-  {
-    var headingElem = document.createElement("div");
-    headingElem.style.cssText = "padding:0 0 3px 3px; text-align: center;";
-    headingElem.textContent = headingText;
-    if (color !== undefined)
-      headingElem.style.color = color;
-    container.appendChild(headingElem);
-  }
-
-
-  function addLabelledField(container, fieldID, labelText, color, labelWidth)
-  {
-    var fullFieldID = container.id + "_" + fieldID;
-
-    var fieldElem = document.createElement("div");
-    fieldElem.id = fullFieldID;
-    fieldElem.style.cssText = "padding:0 0 3px 3px; text-align: left;";
-    container.appendChild(fieldElem);
-
-    var fieldLabel = document.createElement("div");
-    fieldLabel.id = fullFieldID + '_label';
-    fieldLabel.textContent = labelText + ": ";
-    fieldLabel.style.display = 'inline-block';
-    if (labelWidth !== undefined)
-      fieldLabel.style.width = labelWidth + "px";
-    if (color !== undefined)
-      fieldLabel.style.color = color;
-    fieldElem.appendChild(fieldLabel);
-
-    var fieldValue = document.createElement("span");
-    fieldValue.id = fullFieldID + '_value';
-    if (color !== undefined)
-      fieldValue.style.color = color;
-    fieldElem.appendChild(fieldValue);
-  }
-
-
-  function setFieldValue(container, fieldID, newValue)
-  {
-    var fullFieldID = container.id + "_" + fieldID + "_value";
-    var field = document.getElementById(fullFieldID);
-    field.textContent = newValue;
-  }
-
-
-  //
   // Creation functions
   //
 
   function create()
   {
-    createUI();
+    createCanvases();
     createSounds();
+    createIcons();
     createTextures();
     createGeometry();
     createMaterials();
     createMeshes();
     for (var i = 0, end = levels.length; i < end; i++)
       createSceneGraph(levels[i]);
+    createHUD();
   }
 
 
-  function createUI()
+  function createCanvases()
   {
-    game.hud = new HUD(0, 0, 180);
-    document.getElementById('viewport').appendChild(game.hud.domElement);
+    canvases.hudTimer = document.createElement('canvas');
+    canvases.hudLife = document.createElement('canvas');
+    canvases.hudGold = document.createElement('canvas');
+    canvases.hudMain = document.createElement('canvas');
 
-    game.resultsWin = new ResultsWindow(180);
-    document.getElementById('viewport').appendChild(game.resultsWin.domElement);
+    for (var key in canvases) {
+      var canvas = canvases[key];
+      canvas.width = 256;
+      canvas.height = 128;
+      canvas.style.display = 'none';
+      document.body.appendChild(canvas);
+    }
+    canvases.hudMain.width = 1024;
+    canvases.hudMain.height = 128;
+
+    contexts.hudTimer = canvases.hudTimer.getContext('2d');
+    contexts.hudLife = canvases.hudLife.getContext('2d');
+    contexts.hudGold = canvases.hudGold.getContext('2d');
+    contexts.hudMain = canvases.hudMain.getContext('2d');
+
+    for (var key in contexts) {
+      var context = contexts[key];
+      context.fillStyle = "#AAA";
+      context.textAlign = "left";
+      context.textBaseline = "middle";
+      context.font = "96px Arial";
+    }
   }
 
 
@@ -373,10 +267,27 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
+  function createIcons()
+  {
+    icons.hudTimer = null;//new Image();
+    icons.hudLife = new Image();
+    icons.hudGold = new Image();
+
+    //icons.hudTimer.src = "img/timer.png";
+    icons.hudLife.src = "img/life.png";
+    icons.hudGold.src = "img/gold.png";
+  }
+
+
   function createTextures()
   {
     textures.floor = THREE.ImageUtils.loadTexture('img/rock.png');
     textures.wall = THREE.ImageUtils.loadTexture('img/rock.png');
+
+    textures.hudTimer = new THREE.Texture(canvases.hudTimer);
+    textures.hudLife = new THREE.Texture(canvases.hudLife);
+    textures.hudGold = new THREE.Texture(canvases.hudGold);
+    textures.hudMain = new THREE.Texture(canvases.hudMain);
   }
 
 
@@ -393,8 +304,10 @@ var dungeon = function () { // start of the dungeon namespace
     geometry.debugOriginLabel = new THREE.TextGeometry("origin", { 'size': 1.0, 'height': 0.2 });
     geometry.debugXAxisLabel = new THREE.TextGeometry("+x", { 'size': 1.0, 'height': 0.2 });
     geometry.debugZAxisLabel = new THREE.TextGeometry("+z", { 'size': 1.0, 'height': 0.2 });
-    geometry.deadText = new THREE.TextGeometry("Dead", { 'size': 0.6, 'height': 0.2 });
-    geometry.levelCompleteText = new THREE.TextGeometry("Complete!", { 'size': 0.6, 'height': 0.2 });
+    geometry.hudTimer = new THREE.PlaneGeometry(canvases.hudTimer.width, canvases.hudTimer.height);
+    geometry.hudLife = new THREE.PlaneGeometry(canvases.hudLife.width, canvases.hudLife.height);
+    geometry.hudGold = new THREE.PlaneGeometry(canvases.hudGold.width, canvases.hudGold.height);
+    geometry.hudMain = new THREE.PlaneGeometry(canvases.hudMain.width, canvases.hudMain.height);
 
     for (var key in geometry)
       geometry[key].computeBoundingBox();
@@ -421,18 +334,39 @@ var dungeon = function () { // start of the dungeon namespace
     materials.debugGrid = new THREE.MeshBasicMaterial({ 'color': colors.debugGrid, 'wireframe': true, 'wireframeLinewidth': 3 });
     materials.debugAxisLabel = new THREE.MeshBasicMaterial({ 'color': colors.debugAxisLabel });
 
-    materials.deadText = new THREE.MeshLambertMaterial({ 'color': colors.deadText });
-    materials.levelCompleteText = new THREE.MeshLambertMaterial({ 'color': colors.levelCompleteText });
+    materials.hudTimer = new THREE.MeshBasicMaterial({ 'map': textures.hudTimer, 'transparent': true, 'opacity': 1.0 });
+    materials.hudLife = new THREE.MeshBasicMaterial({ 'map': textures.hudLife, 'transparent': true, 'opacity': 1.0 });
+    materials.hudGold = new THREE.MeshBasicMaterial({ 'map': textures.hudGold, 'transparent': true, 'opacity': 1.0 });
+    materials.hudMain = new THREE.MeshBasicMaterial({ 'map': textures.hudMain, 'transparent': true, 'opacity': 0.7 });
   }
 
 
   function createMeshes()
   {
-    meshes.deadText = _createDeadText();
-    meshes.deadText.name = "deadText";
+    var w = renderer.domElement.width;
+    var h = renderer.domElement.height;
+    var cw, ch;
 
-    meshes.levelCompleteText = _createLevelCompleteText();
-    meshes.levelCompleteText.name = "levelCompleteText";
+    cw = canvases.hudTimer.width;
+    ch = canvases.hudTimer.height;
+    meshes.hudTimer = _createHUDElem(geometry.hudTimer, materials.hudTimer, w / 2, h - ch / 2);
+    meshes.hudTimer.name = "timer";
+
+    cw = canvases.hudLife.width;
+    ch = canvases.hudLife.height;
+    meshes.hudLife = _createHUDElem(geometry.hudLife, materials.hudLife, w - cw / 2, ch / 2);
+    meshes.hudLife.name = "life";
+
+    cw = canvases.hudGold.width;
+    ch = canvases.hudGold.height;
+    meshes.hudGold = _createHUDElem(geometry.hudGold, materials.hudGold, cw / 2, ch / 2);
+    meshes.hudGold.name = "gold";
+
+    cw = canvases.hudMain.width;
+    ch = canvases.hudMain.height;
+    meshes.hudMain = _createHUDElem(geometry.hudMain, materials.hudMain, w / 2, h / 2);
+    meshes.hudMain.name = "main";
+    meshes.hudMain.visible = false;
   }
 
 
@@ -481,6 +415,24 @@ var dungeon = function () { // start of the dungeon namespace
 
     level.debugControls = new THREE.TrackballControls(debugCamera, renderer.domElement);
     level.debugControls.enabled = false;
+  }
+
+
+  function createHUD()
+  {
+    game.hud = new THREE.Scene();
+    game.hud.name = "hud";
+
+    game.hud.add(meshes.hudTimer);
+    game.hud.add(meshes.hudLife);
+    game.hud.add(meshes.hudGold);
+    game.hud.add(meshes.hudMain);
+
+    var w = renderer.domElement.width;
+    var h = renderer.domElement.height;
+
+    game.hudcamera = new THREE.OrthographicCamera(0, w, h, 0, -100, 100);
+    game.hud.add(game.hudcamera);
   }
 
 
@@ -658,21 +610,12 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
-  function _createDeadText()
+  function _createHUDElem(geo, mat, x, y)
   {
-    var deadText = new THREE.Mesh(geometry.deadText, materials.deadText);
-    deadText.translateOnAxis(yAxis, geometry.player.height * 0.6);
-    deadText.translateOnAxis(zAxis, geometry.player.depth * 0.5);
-    return deadText;
-  }
-
-
-  function _createLevelCompleteText()
-  {
-    var levelCompleteText = new THREE.Mesh(geometry.levelCompleteText, materials.levelCompleteText);
-    levelCompleteText.translateOnAxis(yAxis, geometry.player.height * 0.6);
-    levelCompleteText.translateOnAxis(zAxis, geometry.player.depth * 0.5);
-    return levelCompleteText;
+    var elem = new THREE.Mesh(geo, mat);
+    elem.translateOnAxis(xAxis, x);
+    elem.translateOnAxis(yAxis, y);
+    return elem;
   }
 
 
@@ -1058,7 +1001,10 @@ var dungeon = function () { // start of the dungeon namespace
       unhideOccluders();  // Unhide the old set of occluding walls.
       hideOccluders();    // Find the new set of occluding walls.
 
+      renderer.autoClear = true;
       renderer.render(game.world, game.camera);
+      renderer.autoClear = false;
+      renderer.render(game.hud, game.hudcamera);
       renderstats.update();
     },
 
@@ -1075,18 +1021,6 @@ var dungeon = function () { // start of the dungeon namespace
       refreshHUD();
       spawnMobs();
     },
-
-
-    enter: function ()
-    {
-      game.hud.show();
-    },
-
-
-    leave: function ()
-    {
-      game.hud.hide();
-    }
   };
 
 
@@ -1238,11 +1172,57 @@ var dungeon = function () { // start of the dungeon namespace
   }
 
 
+  function drawHUDText(key, msg, halign)
+  {
+    var canvas = canvases[key];
+    var ctx = contexts[key];
+    var texture = textures[key];
+    var icon = icons[key];
+
+    var w = canvas.width;
+    var h = canvas.height;
+
+    var tw = ctx.measureText(msg).width;
+
+    var x = 0, y = h / 2;
+    if (halign == "left")
+      x = 0;
+    else if (halign == "right")
+      x = w - tw;
+    else
+      x = (w - tw) / 2;
+
+    ctx.clearRect(0, 0, w, h);
+    if (icon) {
+      var ih = icon.height;
+      var iy = Math.min((h - ih) / 2, 4);
+      ctx.drawImage(icon, 4, iy);
+    }
+    ctx.fillText(msg, x, y);
+
+    texture.needsUpdate = true;
+  }
+
+
+  function roundTo(value, decimalPlaces)
+  {
+    var scale = Math.pow(10, decimalPlaces);
+    var rounded = Math.floor(value * scale) / scale;
+    str = "" + rounded;
+    if (decimalPlaces > 0 && rounded == Math.floor(rounded)) {
+      str += ".";
+      for (var i = 0; i < decimalPlaces; i++)
+        str += 0;
+    }
+    return str;
+  }
+
+
   function refreshHUD()
   {
-    game.hud.setScore(game.score);
-    game.hud.setLife(game.life);
-    game.hud.setStopwatch(ludum.globals.stateT);
+    drawHUDText("hudTimer", "" + roundTo(ludum.globals.stateT, 1), "center");
+    drawHUDText("hudLife", "" + roundTo(game.life, 0), "right");
+    drawHUDText("hudGold", "" + roundTo(game.score, 0), "right");
   }
 
 
@@ -1312,19 +1292,17 @@ var dungeon = function () { // start of the dungeon namespace
 
     enter: function ()
     {
-      game.player.add(meshes.deadText);
+      game.hud.traverse(function (obj) { obj.visible = false; });
+      game.hud.getObjectByName('main').visible = true;
 
-      game.resultsWin.setScore(game.score);
-      game.resultsWin.setLife(game.life);
-      game.resultsWin.setStopwatch(game.levelTime);
-      game.resultsWin.show();
+      drawHUDText("hudMain", "You Are Dead", "center");
     },
 
 
     leave: function()
     {
-      game.player.remove(meshes.deadText);
-      game.resultsWin.hide();
+      game.hud.traverse(function (obj) { obj.visible = true; });
+      game.hud.getObjectByName('main').visible = false;
 
       // Reset to the first level.
       game.nextLevel = 0;
@@ -1345,19 +1323,17 @@ var dungeon = function () { // start of the dungeon namespace
 
     enter: function ()
     {
-      game.player.add(meshes.levelCompleteText);
+      game.hud.traverse(function (obj) { obj.visible = false; });
+      game.hud.getObjectByName('main').visible = true;
 
-      game.resultsWin.setScore(game.score);
-      game.resultsWin.setLife(game.life);
-      game.resultsWin.setStopwatch(game.levelTime);
-      game.resultsWin.show();
+      drawHUDText("hudMain", "Level Complete", "center");
     },
 
 
     leave: function()
     {
-      game.player.remove(meshes.levelCompleteText);
-      game.resultsWin.hide();
+      game.hud.traverse(function (obj) { obj.visible = true; });
+      game.hud.getObjectByName('main').visible = false;
 
       // Move on to the next level.
       game.nextLevel++;
