@@ -243,7 +243,7 @@ var dungeon = function () { // start of the dungeon namespace
       document.body.appendChild(canvas);
     }
     canvases.hudMain.width = 1024;
-    canvases.hudMain.height = 128;
+    canvases.hudMain.height = 256;
 
     contexts.hudTimer = canvases.hudTimer.getContext('2d');
     contexts.hudLife = canvases.hudLife.getContext('2d');
@@ -255,8 +255,9 @@ var dungeon = function () { // start of the dungeon namespace
       context.fillStyle = "#AAA";
       context.textAlign = "left";
       context.textBaseline = "middle";
-      context.font = "96px Arial";
+      context.font = "96px SevenSwordsmen";
     }
+    contexts.hudMain.font = "128px SevenSwordsmen";
   }
 
 
